@@ -104,3 +104,7 @@ uv run streamlit run dashboard/app.py                # launch the dashboard
 - [x] Phase 1 — SQL analysis (SQLite db + 10 business-question queries)
 - [x] Phase 2 — survival-model attrition prediction (Cox PH, per-employee risk scores)
 - [x] Phase 3 — dashboard (Streamlit, 5 tabs, self-bootstrapping)
+
+## License
+
+[MIT](LICENSE)
