@@ -1,0 +1,16 @@
+department,job_level,hires,avg_time_to_fill_days,avg_time_to_hire_days
+Human Resources,1,33,20.5,35.9
+Human Resources,2,13,29.8,49.5
+Human Resources,3,6,31.5,55.8
+Human Resources,4,4,47.5,66.8
+Human Resources,5,7,54.9,84.7
+Research & Development,1,434,24.4,41.4
+Research & Development,2,281,32.7,52.8
+Research & Development,3,129,49.9,73.0
+Research & Development,4,68,61.8,87.3
+Research & Development,5,49,73.6,102.1
+Sales,1,76,20.5,38.1
+Sales,2,240,29.1,48.6
+Sales,3,83,41.3,64.7
+Sales,4,34,46.4,72.4
+Sales,5,13,76.9,107.2

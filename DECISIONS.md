@@ -52,3 +52,20 @@ consistent with tenure, not real historical ATS data. It's useful for
 building and demonstrating time-to-hire analysis (SQL queries, dashboard
 panels, trend charts) but should never be presented as observed fact
 about IBM's actual hiring process.
+
+## 2026-07-01 — SQLite for the SQL analysis layer
+
+**Decision:** load `employees` and `hiring_pipeline` into a local SQLite
+database (`data/processed/hr_analytics.db`, gitignored, rebuilt via
+`load_db.py`) rather than standing up Postgres/DuckDB.
+
+**Why:** zero setup/infra for anyone cloning the repo, full standard SQL
+(CTEs, window functions, joins) so the queries in `sql/queries/`
+demonstrate the same skills a warehouse would require, and the two-table
+split (HRIS export vs. ATS export, joined on `employee_number`) mirrors
+how this data would actually be structured in a real analytics stack.
+
+**How to apply:** if this ever needs to run against a real warehouse, the
+`sql/schema.sql` and `sql/queries/*.sql` are close to portable — only
+SQLite-specific functions (`strftime`, `NTILE`/`PERCENT_RANK` window
+syntax) would need review against the target engine's dialect.

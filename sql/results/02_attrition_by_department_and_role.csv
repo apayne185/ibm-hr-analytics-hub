@@ -1,0 +1,12 @@
+department,job_role,headcount,leavers,attrition_rate_pct
+Sales,Sales Representative,83,33,39.8
+Research & Development,Laboratory Technician,259,62,23.9
+Human Resources,Human Resources,52,12,23.1
+Sales,Sales Executive,326,57,17.5
+Research & Development,Research Scientist,292,47,16.1
+Research & Development,Healthcare Representative,131,9,6.9
+Research & Development,Manufacturing Director,145,10,6.9
+Research & Development,Manager,54,3,5.6
+Sales,Manager,37,2,5.4
+Research & Development,Research Director,80,2,2.5
+Human Resources,Manager,11,0,0.0

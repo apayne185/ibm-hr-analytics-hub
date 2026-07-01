@@ -1,0 +1,6 @@
+tenure_bucket,headcount,leavers,attrition_rate_pct
+0. <1 year,44,16,36.4
+1. 1-2 years,298,86,28.9
+2. 3-4 years,238,39,16.4
+3. 5-9 years,524,58,11.1
+4. 10+ years,366,38,10.4

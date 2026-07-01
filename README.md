@@ -38,6 +38,22 @@ docs/             supporting documentation
 DECISIONS.md      log of non-obvious modelling/design decisions
 ```
 
+## SQL analysis
+
+The enriched dataset is loaded into a SQLite database
+(`data/processed/hr_analytics.db`) with two tables — `employees` (HRIS
+export) and `hiring_pipeline` (synthetic ATS export) — joined on
+`employee_number`, mirroring how this data would actually land in a
+warehouse. `sql/schema.sql` defines the tables; `sql/queries/` holds ten
+business-question queries (attrition drivers, income-percentile risk,
+flight-risk ranking, time-to-hire trends) covering aggregates, CTEs,
+window functions, and joins. `sql/results/` holds their output as CSV.
+
+```bash
+uv run python -m src.hr_analytics.load_db      # build data/processed/hr_analytics.db
+uv run python -m src.hr_analytics.run_queries   # run sql/queries/*.sql -> sql/results/*.csv
+```
+
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/).
@@ -45,11 +61,13 @@ Requires [uv](https://docs.astral.sh/uv/).
 ```bash
 uv sync
 uv run python -m src.hr_analytics.synthetic_hiring   # regenerate data/processed/*
+uv run python -m src.hr_analytics.load_db            # build the SQLite database
+uv run python -m src.hr_analytics.run_queries        # run the SQL analysis queries
 ```
 
 ## Status
 
 - [x] Phase 0 — raw data in place, synthetic hiring pipeline extension generated
-- [ ] SQL analysis
+- [x] Phase 1 — SQL analysis (SQLite db + 10 business-question queries)
 - [ ] Survival-model attrition prediction
 - [ ] Dashboard
