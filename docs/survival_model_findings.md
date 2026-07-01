@@ -81,6 +81,16 @@ jointly instead of four hand-picked flags. The top of that list skews
 heavily toward Sales Representatives and Research Scientists, consistent
 with the role-level attrition rates already seen in the SQL analysis.
 
+Unlike the concordance index, this ranking is **not** cross-validated —
+every employee is scored using the same model that was fit on the full
+dataset, including them. That's standard practice for interpreting a
+Cox model's own fitted risk (the coefficients themselves are what's being
+applied, not a prediction on unseen data), but it means this particular
+list shouldn't be read as an independent, held-out validation of "these
+people will leave" — it's the model's best explanation of relative risk
+given the data it was trained on, which is the appropriate report for a
+retention-conversation tool, not a forecast with its own accuracy claim.
+
 ## Caveat
 
 This model explains association, not causation, and duration is measured

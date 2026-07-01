@@ -71,11 +71,19 @@ def main() -> None:
     employees = raw.rename(columns=EMPLOYEES_COLUMN_MAP)[list(EMPLOYEES_COLUMN_MAP.values())]
     hiring_pipeline = pipeline.rename(columns=PIPELINE_COLUMN_MAP)[list(PIPELINE_COLUMN_MAP.values())]
 
+    # Build in a temp file and swap it into place atomically. pandas.to_sql
+    # commits its own inserts independently of this connection's `with` block,
+    # so without this, a failure between the two to_sql calls (e.g. a future
+    # schema/CSV drift) would leave DB_PATH with employees populated and
+    # hiring_pipeline empty -- and the prior good database already dropped.
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
+    tmp_path = DB_PATH.with_suffix(".db.tmp")
+    tmp_path.unlink(missing_ok=True)
+    with sqlite3.connect(tmp_path) as conn:
         conn.executescript(SCHEMA_PATH.read_text())
         employees.to_sql("employees", conn, if_exists="append", index=False)
         hiring_pipeline.to_sql("hiring_pipeline", conn, if_exists="append", index=False)
+    tmp_path.replace(DB_PATH)
 
     print(f"Loaded {len(employees)} employees and {len(hiring_pipeline)} pipeline rows into {DB_PATH}")
 

@@ -12,11 +12,13 @@ overtime leave at **30.5%**, nearly 3x the rate of those who don't
 (**10.4%**) — `03_attrition_by_overtime.sql`. Company-wide attrition sits
 at **16.1%** (237 of 1,470) — `01_overall_attrition_rate.sql`.
 
-**Attrition is heavily front-loaded.** Employees in their first year leave
-at **36.4%**; by year 3-4 that drops to **16.4%**, and it keeps falling
-to **10.4%** past year 10 — `05_tenure_buckets_vs_attrition.sql`. Whatever
-is driving attrition, it mostly happens early or not at all — retention
-efforts are worth concentrating on the first 24 months.
+**Attrition is heavily front-loaded, and stays high through year two.**
+Employees in their first year leave at **36.4%**; year two is still
+**28.9%** — nearly as high, not a quick drop-off; only by year 3-4 does
+it fall to **16.4%**, then keep falling to **10.4%** past year 10 —
+`05_tenure_buckets_vs_attrition.sql`. Whatever is driving attrition, it's
+concentrated in the first *two* years, not just the first one — retention
+efforts should cover the full 24-month window, not taper off after year one.
 
 **Sales Representatives are the highest-risk role by far**: **39.8%**
 attrition on 83 headcount, well above every other role with meaningful
