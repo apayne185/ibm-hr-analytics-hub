@@ -13,6 +13,7 @@ still on staff. See DECISIONS.md for the duration/censoring assumptions.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import matplotlib
@@ -28,6 +29,7 @@ from lifelines.utils import k_fold_cross_validation
 ENRICHED_PATH = Path("data/processed/hr_employee_attrition_enriched.csv")
 COEFFICIENTS_PATH = Path("data/processed/survival_model_coefficients.csv")
 RISK_SCORES_PATH = Path("data/processed/predicted_attrition_risk.csv")
+METRICS_PATH = Path("data/processed/survival_model_metrics.json")
 PH_ASSUMPTIONS_PATH = Path("docs/ph_assumptions_check.txt")
 FIGURES_DIR = Path("docs/figures")
 
@@ -165,6 +167,20 @@ def main() -> None:
 
     COEFFICIENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     cph.summary.to_csv(COEFFICIENTS_PATH)
+
+    METRICS_PATH.write_text(
+        json.dumps(
+            {
+                "concordance_in_sample": round(cph.concordance_index_, 3),
+                "concordance_cv_mean": round(cv_scores.mean(), 3),
+                "concordance_cv_std": round(cv_scores.std(), 3),
+                "cv_folds": CV_FOLDS,
+                "n_employees": len(model_df),
+                "n_events": int(model_df[EVENT_COL].sum()),
+            },
+            indent=2,
+        )
+    )
 
     plot_kaplan_meier(raw, model_df[DURATION_COL], model_df[EVENT_COL])
 
