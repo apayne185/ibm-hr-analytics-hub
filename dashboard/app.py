@@ -163,12 +163,22 @@ def render_survival_model(coefficients: pd.DataFrame, metrics: dict) -> None:
         help="Out-of-sample estimate — the one to trust for generalization.",
     )
 
-    coef = coefficients.sort_values("exp(coef)", ascending=True)
+    coef = coefficients.sort_values("exp(coef)", ascending=True).copy()
+    # exp(coef) is the hazard multiplier per one-unit increase in the
+    # covariate as fit -- but "one unit" means wildly different things
+    # across rows (one mile for DistanceFromHome, one satisfaction point,
+    # one e-fold multiplicative increase for the log-transformed income
+    # term). Plotting them on a shared axis with no unit label would imply
+    # a comparability that isn't there, so label each covariate with what
+    # its unit actually is instead of just the raw column name.
+    covariate_units = {"log_monthly_income": "log_monthly_income (per e-fold, ~2.72x, income increase)"}
+    coef["display_name"] = coef["covariate"].map(lambda c: covariate_units.get(c, c))
+
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
             x=coef["exp(coef)"],
-            y=coef["covariate"],
+            y=coef["display_name"],
             error_x=dict(
                 type="data",
                 symmetric=False,
@@ -184,8 +194,16 @@ def render_survival_model(coefficients: pd.DataFrame, metrics: dict) -> None:
         title="Hazard ratios (95% CI) — right of the line raises attrition risk, left lowers it",
         xaxis_title="Hazard ratio",
         height=500,
+        margin=dict(l=280),
     )
     st.plotly_chart(fig, width='stretch')
+    st.caption(
+        "Each hazard ratio is per one unit of that covariate **as fit** — a mile for "
+        "DistanceFromHome, a satisfaction point for JobSatisfaction, an e-fold "
+        "(~2.72x) income increase for log_monthly_income. Positions on this shared "
+        "axis are not on a common real-world scale across covariates; compare a "
+        "covariate's ratio to 1.0 (no effect), not to another covariate's ratio."
+    )
 
     st.subheader("Retention curves (Kaplan-Meier)")
     img_col1, img_col2 = st.columns(2)
@@ -209,7 +227,21 @@ def render_flight_risk(risk: pd.DataFrame) -> None:
     if selected_dept != "All":
         current = current[current["Department"] == selected_dept]
 
-    top_n = st.slider("Show top N by risk", min_value=10, max_value=100, value=20, step=10)
+    if current.empty:
+        st.info("No current employees match this filter.")
+        return
+
+    # Slider bounds must track the filtered row count -- a fixed min_value=10
+    # both mislabels "top N" when fewer than N rows exist (head(N) silently
+    # returns fewer than the slider implies) and breaks st.slider itself when
+    # a department has fewer than 10 current employees (min_value > max_value).
+    max_available = len(current)
+    default_n = min(20, max_available)
+    if max_available <= 1:
+        top_n = max_available
+    else:
+        top_n = st.slider("Show top N by risk", min_value=1, max_value=max_available, value=default_n)
+
     st.dataframe(
         current.sort_values("predicted_hazard_score", ascending=False).head(top_n)[
             ["EmployeeNumber", "Department", "JobRole", "predicted_hazard_score", "risk_percentile"]
