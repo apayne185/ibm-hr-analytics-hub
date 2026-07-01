@@ -47,7 +47,8 @@ export) and `hiring_pipeline` (synthetic ATS export) — joined on
 warehouse. `sql/schema.sql` defines the tables; `sql/queries/` holds ten
 business-question queries (attrition drivers, income-percentile risk,
 flight-risk ranking, time-to-hire trends) covering aggregates, CTEs,
-window functions, and joins. `sql/results/` holds their output as CSV.
+window functions, and joins. `sql/results/` holds their output as CSV, and
+[docs/sql_findings.md](docs/sql_findings.md) summarizes what they show.
 
 ```bash
 uv run python -m src.hr_analytics.load_db      # build data/processed/hr_analytics.db
