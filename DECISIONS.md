@@ -1,0 +1,54 @@
+# Decisions Log
+
+Running record of non-obvious modelling and design choices, in the order
+they were made. Anything in `data/processed/` that isn't a straight
+transformation of the raw Kaggle file should be explained here.
+
+## 2026-07-01 — Synthetic hiring pipeline extension
+
+**Decision:** Extend the IBM HR Analytics Employee Attrition dataset
+(`data/raw/WA_Fn-UseC_-HR-Employee-Attrition.csv`, 1,470 employees) with a
+simulated requisition-to-hire pipeline, since the source dataset only has
+`YearsAtCompany` and no recruiting/time-to-hire fields.
+
+**Why:** the role this project is built for explicitly calls out
+time-to-hire as a metric of interest, and no public version of this
+dataset includes it. Rather than fabricate a disconnected dataset, the
+pipeline dates are derived from each employee's actual `YearsAtCompany`,
+so the synthetic fields stay internally consistent with the real data.
+
+**How it works** (`src/hr_analytics/synthetic_hiring.py`):
+1. Fix a snapshot/"today" date of **2024-01-15** for the whole dataset.
+2. For each employee, back out an approximate `start_date` from
+   `snapshot_date - YearsAtCompany` years, minus a random 0-364 day jitter
+   (subtracted, never added, so no `start_date` can fall after the
+   snapshot date) — this avoids every hire anniversary landing on the same
+   calendar day.
+3. Simulate `time_to_fill_days` (requisition opened -> offer accepted)
+   from a lognormal distribution, right-skewed like real recruiting data,
+   with a median that scales with `JobLevel` (junior roles fill faster)
+   and a department multiplier (R&D roles assumed to run more interview
+   loops than Sales or HR).
+4. Simulate `offer_to_start_lag_days` (offer accepted -> first day) as a
+   uniform draw that grows with `JobLevel`, approximating longer notice
+   periods for more senior hires.
+5. `requisition_open_date` and `offer_accepted_date` are derived by
+   walking backwards from `start_date` through those two lags.
+
+**Output:**
+- `data/processed/synthetic_hiring_pipeline.csv` — one row per
+  `EmployeeNumber` with the four pipeline dates plus
+  `time_to_fill_days`, `offer_to_start_lag_days`, `time_to_hire_days`.
+- `data/processed/hr_employee_attrition_enriched.csv` — the raw dataset
+  left-joined with the pipeline table on `EmployeeNumber`.
+
+**Labelling:** every column and file this process touches is documented
+here and called out as synthetic in the README. Nothing in
+`data/raw/` is modified. Reproducible via `numpy.random.default_rng(seed=42)`
+— re-running `synthetic_hiring.py` regenerates identical output.
+
+**Known limitation:** this simulates *plausible* recruiting timelines
+consistent with tenure, not real historical ATS data. It's useful for
+building and demonstrating time-to-hire analysis (SQL queries, dashboard
+panels, trend charts) but should never be presented as observed fact
+about IBM's actual hiring process.
