@@ -97,3 +97,30 @@ floor only applies inside the model-fitting frame.
 **How to apply:** treat the model's hazard ratios as relative risk
 indicators, not causal claims or precise probabilities — see
 `docs/survival_model_findings.md` for the full caveat and results.
+
+## 2026-07-02 — Validate the model, don't just report its in-sample fit
+
+**Decision:** after an initial pass reported only the in-sample
+concordance index, added two checks before trusting those numbers: 5-fold
+cross-validated concordance (`lifelines.utils.k_fold_cross_validation`,
+`seed=42`) and a formal proportional-hazards test
+(`cph.check_assumptions()`, output written to `docs/ph_assumptions_check.txt`).
+
+**Why:** an in-sample concordance index is fit and evaluated on the same
+rows, so it's an optimistic estimate of how well the model generalizes.
+Separately, "Cox Proportional Hazards" is a name with a testable
+assumption baked in (hazard ratios constant over time) — reporting hazard
+ratios without checking that assumption holds is asserting something
+that was never verified.
+
+**Result:** cross-validated concordance (0.860) came in close to
+in-sample (0.870) — the model isn't overfitting meaningfully. The PH
+check passed for every covariate except `YearsSinceLastPromotion`
+(p = 0.0014), which is noted as a caveat on that specific coefficient in
+`docs/survival_model_findings.md` rather than treated as invalidating the
+whole model.
+
+**How to apply:** any future change to the covariate set should re-run
+both checks (`uv run python -m src.hr_analytics.survival_model`) before
+updating the findings doc's numbers — don't hand-edit the reported
+concordance index or assume the PH assumption still holds.

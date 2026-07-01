@@ -6,11 +6,21 @@ in `data/processed/survival_model_coefficients.csv`; per-employee risk
 scores in `data/processed/predicted_attrition_risk.csv`. See
 [DECISIONS.md](../DECISIONS.md) for how duration/censoring were framed.
 
-**Concordance index: 0.870** — the model correctly orders which of two
-randomly chosen employees leaves first, 87% of the time. That's a strong
-result for a design with only 16 covariates and no external labor-market
-data — largely because `OverTime` and `MonthlyIncome` alone carry most of
-the signal already visible in the Phase 1 SQL results.
+**Concordance index: 0.870 in-sample, 0.860 (5-fold CV, +/- 0.012)
+out-of-sample.** The two are close, so the model isn't meaningfully
+overfitting — but the CV number is the one to trust as a generalization
+estimate; the in-sample figure alone would have been optimistic. A model
+that correctly orders which of two employees leaves first ~86% of the
+time is a strong result for only 16 covariates and no external
+labor-market data — largely because `OverTime` and `MonthlyIncome` alone
+carry most of the signal already visible in the Phase 1 SQL results.
+
+**Proportional-hazards assumption:** checked with `cph.check_assumptions()`
+(full output in `docs/ph_assumptions_check.txt`). Every covariate passes
+except `YearsSinceLastPromotion` (p = 0.0014) — its effect isn't constant
+over the full tenure range, which is a caveat on that one coefficient
+specifically (see below), not on the model as a whole. `OverTime`, the
+model's dominant factor, passes cleanly (p = 0.45–0.76).
 
 ## What raises the hazard of leaving
 
@@ -52,7 +62,10 @@ early in a fast-track career (more prone to keep moving, including
 elsewhere), while people who've gone a long time without a promotion and
 are still here have, by construction, already survived. Read that
 coefficient as a proxy for "settled into the role," not as "don't promote
-people."
+people." This is also the one covariate that fails the proportional-hazards
+check above, which is consistent with it being a proxy effect rather than
+a stable, constant-over-time hazard — its coefficient describes an average
+effect across tenure, not a fixed rate.
 
 `WorkLifeBalance` and both `BusinessTravel_Travel_Rarely` and
 `MaritalStatus_Married` were not statistically significant at p < 0.05 —

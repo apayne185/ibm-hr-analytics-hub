@@ -62,7 +62,9 @@ via `lifelines`) predicts attrition risk using each employee's real
 tenure (`YearsAtCompany`) as duration and `Attrition` as the event,
 right-censoring employees still on staff — see
 [DECISIONS.md](DECISIONS.md) for why this framing fits the data better
-than a plain classifier. Concordance index: **0.870**. Outputs:
+than a plain classifier. Concordance index: **0.870 in-sample / 0.860
+5-fold cross-validated**; the proportional-hazards assumption is checked
+for every covariate (`docs/ph_assumptions_check.txt`). Outputs:
 per-factor hazard ratios (`data/processed/survival_model_coefficients.csv`),
 a per-employee risk score (`data/processed/predicted_attrition_risk.csv`),
 Kaplan-Meier retention curves (`docs/figures/`), and a findings write-up
