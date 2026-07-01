@@ -1,0 +1,72 @@
+The ``p_value_threshold`` is set at 0.01. Even under the null hypothesis of no violations, some
+covariates will be below the threshold by chance. This is compounded when there are many covariates.
+Similarly, when there are lots of observations, even minor deviances from the proportional hazard
+assumption will be flagged.
+
+With that in mind, it's best to use a combination of statistical tests and visual tests to determine
+the most serious violations. Produce visual plots using ``check_assumptions(..., show_plots=True)``
+and looking for non-constant lines. See link [A] below for a full example.
+
+<lifelines.StatisticalResult: proportional_hazard_test>
+ null_distribution = chi squared
+degrees_of_freedom = 1
+             model = <lifelines.CoxPHFitter: fitted with 1470 total observations, 1233 right-censored observations>
+         test_name = proportional_hazard_test
+
+---
+                                        test_statistic      p  -log2(p)
+BusinessTravel_Travel_Frequently  km              0.04   0.84      0.25
+                                  rank            0.02   0.88      0.18
+BusinessTravel_Travel_Rarely      km              0.47   0.49      1.02
+                                  rank            0.62   0.43      1.21
+Department_Research & Development km              0.10   0.76      0.40
+                                  rank            0.02   0.90      0.16
+Department_Sales                  km              0.03   0.87      0.20
+                                  rank            0.09   0.77      0.38
+DistanceFromHome                  km              0.20   0.65      0.61
+                                  rank            0.05   0.82      0.29
+EnvironmentSatisfaction           km              0.02   0.89      0.17
+                                  rank            0.00   0.96      0.06
+JobLevel                          km              0.01   0.94      0.08
+                                  rank            0.36   0.55      0.86
+JobSatisfaction                   km              1.05   0.31      1.71
+                                  rank            0.20   0.66      0.61
+MaritalStatus_Married             km              1.61   0.21      2.29
+                                  rank            1.19   0.27      1.86
+MaritalStatus_Single              km              0.03   0.87      0.20
+                                  rank            0.09   0.76      0.40
+NumCompaniesWorked                km              0.71   0.40      1.32
+                                  rank            1.61   0.20      2.29
+OverTime                          km              0.58   0.45      1.17
+                                  rank            0.10   0.76      0.40
+StockOptionLevel                  km              0.02   0.90      0.15
+                                  rank            0.10   0.75      0.41
+WorkLifeBalance                   km              0.36   0.55      0.87
+                                  rank            0.48   0.49      1.04
+YearsSinceLastPromotion           km              7.76   0.01      7.55
+                                  rank           10.26 <0.005      9.52
+log_monthly_income                km              2.23   0.14      2.89
+                                  rank            3.48   0.06      4.01
+
+
+1. Variable 'YearsSinceLastPromotion' failed the non-proportional test: p-value is 0.0014.
+
+   Advice 1: the functional form of the variable 'YearsSinceLastPromotion' might be incorrect. That
+is, there may be non-linear terms missing. The proportional hazard test used is very sensitive to
+incorrect functional forms. See documentation in link [D] below on how to specify a functional form.
+
+   Advice 2: try binning the variable 'YearsSinceLastPromotion' using pd.cut, and then specify it in
+`strata=['YearsSinceLastPromotion', ...]` in the call in `.fit`. See documentation in link [B]
+below.
+
+   Advice 3: try adding an interaction term with your time variable. See documentation in link [C]
+below.
+
+
+---
+[A]  https://lifelines.readthedocs.io/en/latest/jupyter_notebooks/Proportional%20hazard%20assumption.html
+[B]  https://lifelines.readthedocs.io/en/latest/jupyter_notebooks/Proportional%20hazard%20assumption.html#Bin-variable-and-stratify-on-it
+[C]  https://lifelines.readthedocs.io/en/latest/jupyter_notebooks/Proportional%20hazard%20assumption.html#Introduce-time-varying-covariates
+[D]  https://lifelines.readthedocs.io/en/latest/jupyter_notebooks/Proportional%20hazard%20assumption.html#Modify-the-functional-form
+[E]  https://lifelines.readthedocs.io/en/latest/jupyter_notebooks/Proportional%20hazard%20assumption.html#Stratification
+

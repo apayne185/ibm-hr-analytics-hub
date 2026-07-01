@@ -6,6 +6,8 @@ requires-python = ">=3.12"
 dependencies = [
     "pandas>=2.2",
     "numpy>=1.26",
+    "lifelines>=0.30.3",
+    "matplotlib>=3.11.0",
 ]
 
 [build-system]

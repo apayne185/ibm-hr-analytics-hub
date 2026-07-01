@@ -69,3 +69,58 @@ how this data would actually be structured in a real analytics stack.
 `sql/schema.sql` and `sql/queries/*.sql` are close to portable — only
 SQLite-specific functions (`strftime`, `NTILE`/`PERCENT_RANK` window
 syntax) would need review against the target engine's dialect.
+
+## 2026-07-01 — Survival framing: duration and censoring
+
+**Decision:** model attrition with a Cox Proportional Hazards model
+(`src/hr_analytics/survival_model.py`) using `YearsAtCompany` as the
+duration and `Attrition == 'Yes'` as the event indicator, with employees
+still employed treated as right-censored at their current tenure.
+
+**Why:** the dataset has no actual hire/termination timestamps for the
+*real* HR fields (only the synthetic hiring-pipeline dates, which are a
+separate concern — see the synthetic hiring pipeline entry above).
+`YearsAtCompany` + `Attrition` is the standard, well-documented way this
+specific Kaggle dataset gets adapted for survival analysis: it's real
+data (not synthetic), and right-censoring current employees at their
+tenure-so-far is exactly what a survival model is designed to handle,
+unlike a plain classifier which has no way to express "hasn't happened
+yet, might still happen."
+
+**Known adjustment:** `CoxPHFitter` requires strictly positive durations.
+44 employees have `YearsAtCompany == 0`. Rather than drop them, their
+duration is floored at 0.5 years (`duration_years = YearsAtCompany.clip(lower=0.5)`).
+This is a modeling necessity, not a data change — `data/raw/` and
+`data/processed/hr_employee_attrition_enriched.csv` are untouched; the
+floor only applies inside the model-fitting frame.
+
+**How to apply:** treat the model's hazard ratios as relative risk
+indicators, not causal claims or precise probabilities — see
+`docs/survival_model_findings.md` for the full caveat and results.
+
+## 2026-07-02 — Validate the model, don't just report its in-sample fit
+
+**Decision:** after an initial pass reported only the in-sample
+concordance index, added two checks before trusting those numbers: 5-fold
+cross-validated concordance (`lifelines.utils.k_fold_cross_validation`,
+`seed=42`) and a formal proportional-hazards test
+(`cph.check_assumptions()`, output written to `docs/ph_assumptions_check.txt`).
+
+**Why:** an in-sample concordance index is fit and evaluated on the same
+rows, so it's an optimistic estimate of how well the model generalizes.
+Separately, "Cox Proportional Hazards" is a name with a testable
+assumption baked in (hazard ratios constant over time) — reporting hazard
+ratios without checking that assumption holds is asserting something
+that was never verified.
+
+**Result:** cross-validated concordance (0.860) came in close to
+in-sample (0.870) — the model isn't overfitting meaningfully. The PH
+check passed for every covariate except `YearsSinceLastPromotion`
+(p = 0.0014), which is noted as a caveat on that specific coefficient in
+`docs/survival_model_findings.md` rather than treated as invalidating the
+whole model.
+
+**How to apply:** any future change to the covariate set should re-run
+both checks (`uv run python -m src.hr_analytics.survival_model`) before
+updating the findings doc's numbers — don't hand-edit the reported
+concordance index or assume the PH assumption still holds.
