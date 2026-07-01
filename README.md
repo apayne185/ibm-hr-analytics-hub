@@ -55,6 +55,19 @@ uv run python -m src.hr_analytics.load_db      # build data/processed/hr_analyti
 uv run python -m src.hr_analytics.run_queries   # run sql/queries/*.sql -> sql/results/*.csv
 ```
 
+## Survival-model attrition prediction
+
+A Cox Proportional Hazards model (`src/hr_analytics/survival_model.py`,
+via `lifelines`) predicts attrition risk using each employee's real
+tenure (`YearsAtCompany`) as duration and `Attrition` as the event,
+right-censoring employees still on staff — see
+[DECISIONS.md](DECISIONS.md) for why this framing fits the data better
+than a plain classifier. Concordance index: **0.870**. Outputs:
+per-factor hazard ratios (`data/processed/survival_model_coefficients.csv`),
+a per-employee risk score (`data/processed/predicted_attrition_risk.csv`),
+Kaplan-Meier retention curves (`docs/figures/`), and a findings write-up
+at [docs/survival_model_findings.md](docs/survival_model_findings.md).
+
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/).
@@ -64,11 +77,12 @@ uv sync
 uv run python -m src.hr_analytics.synthetic_hiring   # regenerate data/processed/*
 uv run python -m src.hr_analytics.load_db            # build the SQLite database
 uv run python -m src.hr_analytics.run_queries        # run the SQL analysis queries
+uv run python -m src.hr_analytics.survival_model     # fit the Cox model, generate risk scores + plots
 ```
 
 ## Status
 
 - [x] Phase 0 — raw data in place, synthetic hiring pipeline extension generated
 - [x] Phase 1 — SQL analysis (SQLite db + 10 business-question queries)
-- [ ] Survival-model attrition prediction
+- [x] Phase 2 — survival-model attrition prediction (Cox PH, per-employee risk scores)
 - [ ] Dashboard
