@@ -1,0 +1,5 @@
+time_to_fill_bucket,headcount,leavers,attrition_rate_pct
+0. <25 days,547,121,22.1
+1. 25-39 days,516,72,14.0
+2. 40-59 days,264,26,9.8
+3. 60+ days,143,18,12.6

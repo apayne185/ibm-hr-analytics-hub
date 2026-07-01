@@ -1,0 +1,21 @@
+employee_number,department,job_role,monthly_income,income_percentile_in_role,over_time,risk_flags,flight_risk_rank
+1015,Research & Development,Research Director,11416,0.03,Yes,4,1
+1669,Sales,Sales Executive,4187,0.04,Yes,4,2
+1244,Research & Development,Research Scientist,2235,0.15,Yes,4,3
+68,Sales,Sales Executive,5454,0.37,Yes,4,4
+21,Research & Development,Research Scientist,3298,0.59,Yes,4,5
+214,Research & Development,Research Scientist,3346,0.61,Yes,4,6
+267,Research & Development,Research Scientist,3564,0.68,Yes,4,7
+141,Research & Development,Research Director,18172,0.7,Yes,4,8
+1396,Sales,Sales Executive,4078,0.01,Yes,3,9
+518,Research & Development,Manufacturing Director,4197,0.02,Yes,3,10
+1048,Sales,Manager,11904,0.04,Yes,3,11
+1321,Research & Development,Manager,11916,0.05,Yes,3,12
+524,Research & Development,Manufacturing Director,4306,0.05,No,3,13
+381,Research & Development,Manager,11996,0.06,No,3,14
+1448,Research & Development,Research Scientist,2127,0.1,Yes,3,15
+836,Research & Development,Manufacturing Director,4434,0.11,No,3,16
+1609,Research & Development,Research Scientist,2141,0.11,No,3,17
+1202,Research & Development,Research Scientist,2168,0.12,Yes,3,18
+390,Research & Development,Healthcare Representative,4741,0.13,Yes,3,19
+88,Research & Development,Research Scientist,2194,0.14,No,3,20
