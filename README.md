@@ -35,6 +35,8 @@ sql/              SQL analysis queries
 notebooks/        exploratory analysis
 dashboard/        BI dashboard
 docs/             supporting documentation
+tests/            pytest suite
+.github/workflows/  CI
 DECISIONS.md      log of non-obvious modelling/design decisions
 ```
 
@@ -85,6 +87,22 @@ so it works from a fresh clone with no other setup.
 uv run streamlit run dashboard/app.py
 ```
 
+## Testing
+
+`tests/` (pytest) covers the data-generation invariants (date ordering,
+reproducibility under a fixed seed), the survival model (duration/event
+validity, feature-column correctness), the SQLite loader (atomic-write
+behavior under a simulated mid-load failure), and every SQL query
+(runs cleanly + a regression test for the month-spine fix in query 10).
+CI (`.github/workflows/ci.yml`) runs the suite on every push/PR, then
+rebuilds the full pipeline end-to-end and fails the build if regenerating
+it produces any diff against what's committed — the same class of
+staleness bug caught twice during development (see DECISIONS.md).
+
+```bash
+uv run pytest tests/ -v
+```
+
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/).
@@ -104,6 +122,7 @@ uv run streamlit run dashboard/app.py                # launch the dashboard
 - [x] Phase 1 — SQL analysis (SQLite db + 10 business-question queries)
 - [x] Phase 2 — survival-model attrition prediction (Cox PH, per-employee risk scores)
 - [x] Phase 3 — dashboard (Streamlit, 5 tabs, self-bootstrapping)
+- [x] Tests + CI (pytest suite, GitHub Actions pipeline-reproducibility check)
 
 ## License
 
