@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from lifelines import CoxPHFitter, KaplanMeierFitter
-from lifelines.statistics import logrank_test
+from lifelines.statistics import logrank_test, proportional_hazard_test
 from lifelines.utils import k_fold_cross_validation
 
 ENRICHED_PATH = Path("data/processed/hr_employee_attrition_enriched.csv")
@@ -96,22 +96,48 @@ def cross_validated_concordance(model_df: pd.DataFrame, k: int = CV_FOLDS) -> np
     return np.array(scores)
 
 
-def check_ph_assumptions(cph: CoxPHFitter, model_df: pd.DataFrame) -> None:
-    """Write the proportional-hazards diagnostic to a text file instead of
-    only printing, since check_assumptions' warnings are otherwise easy to miss."""
-    import io
-    import warnings
-    from contextlib import redirect_stdout
+def check_ph_assumptions(cph: CoxPHFitter, model_df: pd.DataFrame, p_value_threshold: float = 0.01) -> None:
+    """Write the proportional-hazards diagnostic to a text file.
 
-    buffer = io.StringIO()
-    with redirect_stdout(buffer), warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        cph.check_assumptions(model_df[feature_columns(model_df, include_target=True)], show_plots=False)
-        for w in caught:
-            buffer.write(f"\n{w.category.__name__}: {w.message}\n")
+    Calls proportional_hazard_test() directly rather than
+    CoxPHFitter.check_assumptions(): that method's own printing detects
+    whether IPython is importable and, if so, renders its summary table via
+    IPython's rich display instead of plain text -- which produces an opaque
+    "<IPython.core.display.HTML object>" placeholder when its stdout is
+    captured outside a real notebook. This project has IPython as a
+    transitive dev dependency (for notebooks/), so relying on
+    check_assumptions()'s environment-sensitive printing broke this output
+    the moment that dependency was added. Building the table ourselves from
+    the same underlying statistical test sidesteps that fragility entirely.
+    """
+    training_df = model_df[feature_columns(model_df, include_target=True)]
+    residuals = cph.compute_residuals(training_df, kind="scaled_schoenfeld")
+    test_results = proportional_hazard_test(
+        cph, training_df, time_transform=["rank", "km"], precomputed_residuals=residuals
+    )
+
+    lines = [
+        f"Proportional-hazards assumption check (p_value_threshold = {p_value_threshold}).",
+        "Two time-transform tests (rank, km) per covariate; see docs/survival_model_findings.md for interpretation.",
+        "",
+        test_results.summary.to_string(),
+        "",
+    ]
+
+    min_p_by_variable = test_results.summary["p"].groupby(level=0).min()
+    failing = min_p_by_variable[min_p_by_variable < p_value_threshold]
+    if failing.empty:
+        lines.append("No covariate failed the proportional-hazards test at this threshold.")
+    else:
+        for variable, p in failing.items():
+            lines.append(
+                f"- '{variable}' failed the non-proportional test: p-value is {p:.4f}. "
+                "Its hazard ratio is a time-averaged effect, not a constant one -- "
+                "see docs/survival_model_findings.md."
+            )
 
     PH_ASSUMPTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    PH_ASSUMPTIONS_PATH.write_text(buffer.getvalue())
+    PH_ASSUMPTIONS_PATH.write_text("\n".join(lines))
     print(f"Proportional-hazards assumption check written to {PH_ASSUMPTIONS_PATH}")
 
 

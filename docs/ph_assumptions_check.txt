@@ -1,72 +1,38 @@
-The ``p_value_threshold`` is set at 0.01. Even under the null hypothesis of no violations, some
-covariates will be below the threshold by chance. This is compounded when there are many covariates.
-Similarly, when there are lots of observations, even minor deviances from the proportional hazard
-assumption will be flagged.
+Proportional-hazards assumption check (p_value_threshold = 0.01).
+Two time-transform tests (rank, km) per covariate; see docs/survival_model_findings.md for interpretation.
 
-With that in mind, it's best to use a combination of statistical tests and visual tests to determine
-the most serious violations. Produce visual plots using ``check_assumptions(..., show_plots=True)``
-and looking for non-constant lines. See link [A] below for a full example.
+                                        test_statistic         p  -log2(p)
+BusinessTravel_Travel_Frequently  km          0.039986  0.841509  0.248950
+                                  rank        0.021177  0.884298  0.177395
+BusinessTravel_Travel_Rarely      km          0.469344  0.493289  1.019495
+                                  rank        0.616864  0.432215  1.210179
+Department_Research & Development km          0.095090  0.757804  0.400104
+                                  rank        0.017351  0.895204  0.159711
+Department_Sales                  km          0.027681  0.867860  0.204465
+                                  rank        0.087769  0.767033  0.382639
+DistanceFromHome                  km          0.201326  0.653653  0.613404
+                                  rank        0.051428  0.820597  0.285254
+EnvironmentSatisfaction           km          0.018927  0.890577  0.167188
+                                  rank        0.002708  0.958499  0.061151
+JobLevel                          km          0.005047  0.943364  0.084114
+                                  rank        0.355637  0.550939  0.860035
+JobSatisfaction                   km          1.046799  0.306245  1.707240
+                                  rank        0.197443  0.656793  0.606490
+MaritalStatus_Married             km          1.605355  0.205146  2.285277
+                                  rank        1.192582  0.274809  1.863497
+MaritalStatus_Single              km          0.027709  0.867795  0.204573
+                                  rank        0.093631  0.759610  0.396669
+NumCompaniesWorked                km          0.707349  0.400325  1.320755
+                                  rank        1.613478  0.204004  2.293334
+OverTime                          km          0.581041  0.445905  1.165193
+                                  rank        0.097037  0.755414  0.404660
+StockOptionLevel                  km          0.015371  0.901330  0.149872
+                                  rank        0.100369  0.751387  0.412371
+WorkLifeBalance                   km          0.359835  0.548598  0.866179
+                                  rank        0.483967  0.486631  1.039100
+YearsSinceLastPromotion           km          7.764381  0.005329  7.552013
+                                  rank       10.256438  0.001362  9.519968
+log_monthly_income                km          2.233578  0.135041  2.888533
+                                  rank        3.482036  0.062038  4.010695
 
-<lifelines.StatisticalResult: proportional_hazard_test>
- null_distribution = chi squared
-degrees_of_freedom = 1
-             model = <lifelines.CoxPHFitter: fitted with 1470 total observations, 1233 right-censored observations>
-         test_name = proportional_hazard_test
-
----
-                                        test_statistic      p  -log2(p)
-BusinessTravel_Travel_Frequently  km              0.04   0.84      0.25
-                                  rank            0.02   0.88      0.18
-BusinessTravel_Travel_Rarely      km              0.47   0.49      1.02
-                                  rank            0.62   0.43      1.21
-Department_Research & Development km              0.10   0.76      0.40
-                                  rank            0.02   0.90      0.16
-Department_Sales                  km              0.03   0.87      0.20
-                                  rank            0.09   0.77      0.38
-DistanceFromHome                  km              0.20   0.65      0.61
-                                  rank            0.05   0.82      0.29
-EnvironmentSatisfaction           km              0.02   0.89      0.17
-                                  rank            0.00   0.96      0.06
-JobLevel                          km              0.01   0.94      0.08
-                                  rank            0.36   0.55      0.86
-JobSatisfaction                   km              1.05   0.31      1.71
-                                  rank            0.20   0.66      0.61
-MaritalStatus_Married             km              1.61   0.21      2.29
-                                  rank            1.19   0.27      1.86
-MaritalStatus_Single              km              0.03   0.87      0.20
-                                  rank            0.09   0.76      0.40
-NumCompaniesWorked                km              0.71   0.40      1.32
-                                  rank            1.61   0.20      2.29
-OverTime                          km              0.58   0.45      1.17
-                                  rank            0.10   0.76      0.40
-StockOptionLevel                  km              0.02   0.90      0.15
-                                  rank            0.10   0.75      0.41
-WorkLifeBalance                   km              0.36   0.55      0.87
-                                  rank            0.48   0.49      1.04
-YearsSinceLastPromotion           km              7.76   0.01      7.55
-                                  rank           10.26 <0.005      9.52
-log_monthly_income                km              2.23   0.14      2.89
-                                  rank            3.48   0.06      4.01
-
-
-1. Variable 'YearsSinceLastPromotion' failed the non-proportional test: p-value is 0.0014.
-
-   Advice 1: the functional form of the variable 'YearsSinceLastPromotion' might be incorrect. That
-is, there may be non-linear terms missing. The proportional hazard test used is very sensitive to
-incorrect functional forms. See documentation in link [D] below on how to specify a functional form.
-
-   Advice 2: try binning the variable 'YearsSinceLastPromotion' using pd.cut, and then specify it in
-`strata=['YearsSinceLastPromotion', ...]` in the call in `.fit`. See documentation in link [B]
-below.
-
-   Advice 3: try adding an interaction term with your time variable. See documentation in link [C]
-below.
-
-
----
-[A]  https://lifelines.readthedocs.io/en/latest/jupyter_notebooks/Proportional%20hazard%20assumption.html
-[B]  https://lifelines.readthedocs.io/en/latest/jupyter_notebooks/Proportional%20hazard%20assumption.html#Bin-variable-and-stratify-on-it
-[C]  https://lifelines.readthedocs.io/en/latest/jupyter_notebooks/Proportional%20hazard%20assumption.html#Introduce-time-varying-covariates
-[D]  https://lifelines.readthedocs.io/en/latest/jupyter_notebooks/Proportional%20hazard%20assumption.html#Modify-the-functional-form
-[E]  https://lifelines.readthedocs.io/en/latest/jupyter_notebooks/Proportional%20hazard%20assumption.html#Stratification
-
+- 'YearsSinceLastPromotion' failed the non-proportional test: p-value is 0.0014. Its hazard ratio is a time-averaged effect, not a constant one -- see docs/survival_model_findings.md.
