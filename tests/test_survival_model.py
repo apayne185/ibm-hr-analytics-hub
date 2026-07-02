@@ -60,3 +60,18 @@ def test_model_fits_and_scores_every_row(raw_df: pd.DataFrame) -> None:
     partial_hazard = cph.predict_partial_hazard(model_df[feature_columns(model_df, include_target=False)])
     assert len(partial_hazard) == len(model_df)
     assert partial_hazard.index.equals(model_df.index)
+
+
+def test_overtime_is_the_dominant_risk_factor(raw_df: pd.DataFrame) -> None:
+    """Exact coefficient values aren't bit-reproducible across platforms
+    (CoxPHFitter's optimizer can converge to meaningfully different values
+    depending on the BLAS backend -- see DECISIONS.md), so this checks the
+    headline finding stays true within a wide tolerance band instead of
+    pinning an exact number: OverTime should come out as a large,
+    statistically significant risk factor every time this is fit."""
+    model_df = build_model_frame(raw_df)
+    cph = fit_model(model_df)
+
+    overtime_row = cph.summary.loc["OverTime"]
+    assert overtime_row["p"] < 0.01, "OverTime should be a statistically significant hazard factor"
+    assert 1.5 < overtime_row["exp(coef)"] < 3.0, "OverTime's hazard ratio drifted outside the expected range"

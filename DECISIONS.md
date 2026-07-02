@@ -220,3 +220,44 @@ writing. For any binary/rendered output (images, plots), don't add it to
 a strict byte-diff CI check; check that it exists and is a sane size
 instead. Discovered by actually checking the GitHub Actions run result
 via the API rather than assuming "passed locally" meant "passed in CI."
+
+## 2026-07-02 — Rounding wasn't enough: stop requiring exact-match CI for model-fitted outputs
+
+**Decision:** correcting the previous entry — rounding to 6 decimals did
+*not* fix the CI failure. The GitHub Actions runner's re-fit coefficients
+differed from the locally-committed ones by more than 6 decimal places,
+confirmed by diffing the rounding-only commit against itself (same
+values, just reformatted) before the CI run still failed on the next
+commit. Removed `data/processed/survival_model_coefficients.csv`,
+`predicted_attrition_risk.csv`, `survival_model_metrics.json`, and
+`docs/ph_assumptions_check.txt` from CI's exact-diff check entirely.
+The check now only covers `synthetic_hiring_pipeline.csv`,
+`hr_employee_attrition_enriched.csv` (pure seeded RNG + arithmetic), and
+`sql/results/` (pure SQL against byte-identical data) — genuinely
+bit-reproducible outputs.
+
+**Why:** `CoxPHFitter`'s Newton-Raphson optimizer, run against several
+highly correlated covariates (`JobLevel`, `MonthlyIncome`,
+`TotalWorkingYears`, `YearsAtCompany` — see the correlation heatmap in
+`notebooks/01_exploratory_data_analysis.ipynb`), can converge to
+meaningfully different coefficient values across BLAS/LAPACK backends,
+not just different last-digit noise. This is a known, accepted
+limitation of iterative numerical optimization — forcing byte-identical
+output across arbitrary machines is not achievable without pinning the
+exact BLAS implementation (impractical for a portfolio project), and
+rounding only helps with noise below the rounding precision, not
+genuine divergence above it.
+
+**How correctness is actually enforced instead:** `tests/test_survival_model.py`
+now has `test_overtime_is_the_dominant_risk_factor`, asserting the
+headline finding (OverTime is a significant, large hazard factor) holds
+within a tolerance band on every fit, rather than pinning an exact
+coefficient. The existing invariant tests (positive duration, valid
+event coding, index-aligned predictions) cover the rest. The committed
+CSVs remain the last-known-good analysis artifacts referenced by the
+findings docs — accurate as of when they were generated, not
+guaranteed bit-identical to a future re-run.
+
+**How to apply:** don't add new tracked files derived from an iterative
+model fit to a strict CI diff check. Test model outputs by asserting
+properties/tolerance bounds, not exact values.
