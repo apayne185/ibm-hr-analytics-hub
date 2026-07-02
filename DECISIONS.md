@@ -186,3 +186,37 @@ the runtime behavior of existing code through packages that conditionally
 detect what else is installed (rich display, plotting backends, optional
 accelerators). After adding a dependency, re-run the full pipeline and
 diff tracked output files, not just the code you meant to touch.
+
+## 2026-07-02 — CI failed on GitHub despite passing locally: cross-platform float noise
+
+**Decision:** round `cph.summary` and `predicted_hazard_score` to 6
+decimal places before writing to CSV (`survival_model.py`), and round
+the proportional-hazards test summary before formatting it to text,
+instead of writing full float64 precision.
+
+**Why:** the GitHub Actions CI run (added in the previous commit) failed
+its pipeline-reproducibility check even though the exact same pipeline
+passed locally multiple times. `CoxPHFitter`'s Newton-Raphson optimizer
+and the residual-based proportional-hazards test can converge to
+slightly different values in the low-order digits depending on the
+platform's BLAS/LAPACK backend and CPU vector instructions — a
+well-known limitation of bitwise floating-point reproducibility across
+environments, not a bug in this project's logic. Writing full float64
+precision to a tracked CSV turned that harmless numerical noise into a
+spurious diff every time the pipeline ran on a different machine than
+the one that last committed it.
+
+**Also fixed in the same pass:** the CI workflow was checking
+`docs/figures/*.png` for byte-for-byte equality, which is not a
+meaningful reproducibility signal — matplotlib's PNG output isn't
+guaranteed identical across platforms (font rendering/anti-aliasing,
+embedded metadata) even with identical input data. Changed that check to
+verify the PNGs regenerate and are a plausible size, not byte-equal.
+
+**How to apply:** for any future numeric output written to a tracked
+file, ask whether full float precision is actually meaningful (it rarely
+is past 6 decimals for a hazard ratio or a percentage) — round it before
+writing. For any binary/rendered output (images, plots), don't add it to
+a strict byte-diff CI check; check that it exists and is a sane size
+instead. Discovered by actually checking the GitHub Actions run result
+via the API rather than assuming "passed locally" meant "passed in CI."
