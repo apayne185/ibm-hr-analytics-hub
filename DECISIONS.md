@@ -124,3 +124,65 @@ whole model.
 both checks (`uv run python -m src.hr_analytics.survival_model`) before
 updating the findings doc's numbers — don't hand-edit the reported
 concordance index or assume the PH assumption still holds.
+
+## 2026-07-02 — Streamlit for the dashboard, metrics read from a file not hardcoded
+
+**Decision:** build the dashboard (`dashboard/app.py`) with Streamlit +
+Plotly rather than a static BI tool (Tableau/Power BI/Looker), and have
+it self-bootstrap `data/processed/*` and `docs/figures/*` on first run if
+they're missing.
+
+**Why:** a static BI tool would need its own proprietary project file
+committed to the repo (not diffable, not runnable from a fresh clone
+without that tool installed) and can't be demoed from a `git clone` +
+one command. Streamlit is pure Python, reads directly from the same
+SQLite db and CSVs the SQL/survival-model phases already produce, and
+`uv run streamlit run dashboard/app.py` is the whole setup — matching
+the "one command per phase" pattern the rest of this repo already uses.
+
+**Known fix during build:** the first draft hardcoded the concordance
+index values (0.870 / 0.860) as literal strings in the Survival Model
+tab. Fixed by having `survival_model.py` write
+`data/processed/survival_model_metrics.json` and having the dashboard
+read it — the same class of staleness risk already fixed once in this
+project (see the SQL query 10 gap-month bug and the load_db.py
+atomicity fix); hardcoded numbers that mirror a pipeline output are a
+recurring trap here and worth checking for on every new artifact.
+
+**How to apply:** any new dashboard metric that comes from a Python
+computation (not a live SQL query against the db) should be written to a
+small file by the script that computes it and read back by the
+dashboard — never typed in by hand a second time.
+
+## 2026-07-02 — Adding a dev dependency silently broke an unrelated script's output
+
+**Decision:** replace `CoxPHFitter.check_assumptions()` in
+`check_ph_assumptions()` (`survival_model.py`) with a direct call to
+`lifelines.statistics.proportional_hazard_test()`, formatting the result
+ourselves with `.to_string()` instead of relying on lifelines' own
+printing.
+
+**Why:** adding `jupyter`/`ipykernel` as a dev dependency (for the EDA
+notebook) made IPython importable in this project's venv for the first
+time. `check_assumptions()` detects IPython at runtime and switches from
+plain-text printing to IPython's rich `display()` — which, when its
+stdout is captured (as `check_ph_assumptions()` does, to write the file),
+produces a useless `<IPython.core.display.HTML object>` placeholder
+instead of the actual table. This was caught by re-running the full
+pipeline end-to-end while building the CI workflow and diffing the
+output against what was committed — `docs/ph_assumptions_check.txt` had
+silently gone blank of real data.
+
+**Why fixed this way, not by suppressing IPython:** monkeypatching or
+disabling IPython detection would be a bandaid tied to lifelines'
+internal implementation and could break again on a lifelines upgrade.
+Calling `proportional_hazard_test()` directly and formatting the
+DataFrame ourselves has zero dependency on what's importable in the
+environment — the same statistical test, a strictly more robust caller.
+
+**How to apply:** this is a general lesson for this repo, not just this
+function — adding *any* new dependency (even a dev-only one) can change
+the runtime behavior of existing code through packages that conditionally
+detect what else is installed (rich display, plotting backends, optional
+accelerators). After adding a dependency, re-run the full pipeline and
+diff tracked output files, not just the code you meant to touch.

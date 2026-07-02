@@ -35,6 +35,8 @@ sql/              SQL analysis queries
 notebooks/        exploratory analysis
 dashboard/        BI dashboard
 docs/             supporting documentation
+tests/            pytest suite
+.github/workflows/  CI
 DECISIONS.md      log of non-obvious modelling/design decisions
 ```
 
@@ -70,6 +72,37 @@ a per-employee risk score (`data/processed/predicted_attrition_risk.csv`),
 Kaplan-Meier retention curves (`docs/figures/`), and a findings write-up
 at [docs/survival_model_findings.md](docs/survival_model_findings.md).
 
+## Dashboard
+
+A Streamlit app (`dashboard/app.py`) ties everything together: Overview
+(headline KPIs), Attrition Drivers (interactive versions of the Phase 1
+SQL cuts), Survival Model (hazard-ratio forest plot + Kaplan-Meier
+curves, sourced from `data/processed/survival_model_metrics.json` rather
+than hardcoded), Flight Risk Watchlist (filterable per-employee risk
+table), and Hiring Pipeline (clearly labelled as synthetic). It rebuilds
+`data/processed/*` and `docs/figures/*` on first run if they're missing,
+so it works from a fresh clone with no other setup.
+
+```bash
+uv run streamlit run dashboard/app.py
+```
+
+## Testing
+
+`tests/` (pytest) covers the data-generation invariants (date ordering,
+reproducibility under a fixed seed), the survival model (duration/event
+validity, feature-column correctness), the SQLite loader (atomic-write
+behavior under a simulated mid-load failure), and every SQL query
+(runs cleanly + a regression test for the month-spine fix in query 10).
+CI (`.github/workflows/ci.yml`) runs the suite on every push/PR, then
+rebuilds the full pipeline end-to-end and fails the build if regenerating
+it produces any diff against what's committed — the same class of
+staleness bug caught twice during development (see DECISIONS.md).
+
+```bash
+uv run pytest tests/ -v
+```
+
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/).
@@ -80,6 +113,7 @@ uv run python -m src.hr_analytics.synthetic_hiring   # regenerate data/processed
 uv run python -m src.hr_analytics.load_db            # build the SQLite database
 uv run python -m src.hr_analytics.run_queries        # run the SQL analysis queries
 uv run python -m src.hr_analytics.survival_model     # fit the Cox model, generate risk scores + plots
+uv run streamlit run dashboard/app.py                # launch the dashboard
 ```
 
 ## Status
@@ -87,4 +121,9 @@ uv run python -m src.hr_analytics.survival_model     # fit the Cox model, genera
 - [x] Phase 0 — raw data in place, synthetic hiring pipeline extension generated
 - [x] Phase 1 — SQL analysis (SQLite db + 10 business-question queries)
 - [x] Phase 2 — survival-model attrition prediction (Cox PH, per-employee risk scores)
-- [ ] Dashboard
+- [x] Phase 3 — dashboard (Streamlit, 5 tabs, self-bootstrapping)
+- [x] Tests + CI (pytest suite, GitHub Actions pipeline-reproducibility check)
+
+## License
+
+[MIT](LICENSE)

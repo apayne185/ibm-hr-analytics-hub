@@ -1,0 +1,8 @@
+{
+  "concordance_in_sample": 0.87,
+  "concordance_cv_mean": 0.86,
+  "concordance_cv_std": 0.012,
+  "cv_folds": 5,
+  "n_employees": 1470,
+  "n_events": 237
+}
