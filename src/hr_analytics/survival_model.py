@@ -120,7 +120,7 @@ def check_ph_assumptions(cph: CoxPHFitter, model_df: pd.DataFrame, p_value_thres
         f"Proportional-hazards assumption check (p_value_threshold = {p_value_threshold}).",
         "Two time-transform tests (rank, km) per covariate; see docs/survival_model_findings.md for interpretation.",
         "",
-        test_results.summary.to_string(),
+        test_results.summary.round(6).to_string(),  # see coefficients rounding note in main()
         "",
     ]
 
@@ -192,7 +192,12 @@ def main() -> None:
     check_ph_assumptions(cph, model_df)
 
     COEFFICIENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    cph.summary.to_csv(COEFFICIENTS_PATH)
+    # Rounded before writing: CoxPHFitter's Newton-Raphson optimizer can
+    # converge to slightly different values in the noise-floor digits across
+    # platforms/BLAS backends, which showed up as a spurious CI diff on
+    # full float64 precision. 6 decimals is far more precision than a hazard
+    # ratio is ever interpreted at, and absorbs that cross-platform noise.
+    cph.summary.round(6).to_csv(COEFFICIENTS_PATH)
 
     METRICS_PATH.write_text(
         json.dumps(
@@ -225,6 +230,7 @@ def main() -> None:
         }
     )
     risk["risk_percentile"] = risk["predicted_hazard_score"].rank(pct=True).round(3)
+    risk["predicted_hazard_score"] = risk["predicted_hazard_score"].round(6)  # see coefficients rounding note above
     risk = risk.sort_values("predicted_hazard_score", ascending=False)
     risk.to_csv(RISK_SCORES_PATH, index=False)
 
