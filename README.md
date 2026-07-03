@@ -97,6 +97,10 @@ requires connecting your own GitHub account:
 
 1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
 2. "Create app" → pick this repo, branch `main`, main file path `dashboard/app.py`.
+   Open **Advanced settings** and confirm/set the Python version to **3.12**
+   — this repo requires it (`pyproject.toml`'s `requires-python`), and
+   `.python-version` is only a suggested default, not guaranteed to be
+   picked up automatically. Skipping this can fail the install outright.
 3. Deploy. First boot takes ~15-30s (installs dependencies, then runs the
    self-bootstrap check — which only rebuilds `hr_analytics.db` from the
    already-committed CSVs, not a full model refit, so it's fast).
