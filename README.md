@@ -2,8 +2,10 @@
 
 An end-to-end people analytics pipeline: raw HR data → SQL analysis →
 survival-model attrition prediction → a live dashboard. Built as a
-hands-on project covering the SQL, Python, BI, and GenAI-assisted
-analysis workflow used in modern people-analytics roles.
+hands-on project covering the SQL, Python, and BI workflow used in
+modern people-analytics roles, developed with AI-assisted coding
+tooling throughout — every non-obvious design or modeling decision along
+the way is reviewed and recorded in [DECISIONS.md](DECISIONS.md).
 
 ## Data
 
