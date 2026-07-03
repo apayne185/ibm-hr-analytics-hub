@@ -221,6 +221,7 @@ def render_flight_risk(risk: pd.DataFrame) -> None:
     )
 
     current = risk[risk["Attrition"] == "No"].copy()
+    current = current.rename(columns={"risk_percentile": "risk_percentile_companywide"})
 
     departments = ["All"] + sorted(current["Department"].unique().tolist())
     selected_dept = st.selectbox("Department", departments)
@@ -230,6 +231,15 @@ def render_flight_risk(risk: pd.DataFrame) -> None:
     if current.empty:
         st.info("No current employees match this filter.")
         return
+
+    # risk_percentile_companywide is fixed (computed once, among all current
+    # employees, in survival_model.py) and does NOT update with this filter --
+    # a department filter needs its own percentile column, or a viewer would
+    # reasonably assume the shown percentile is relative to what they just
+    # filtered to.
+    current["risk_percentile_in_filter"] = (
+        current["predicted_hazard_score"].rank(pct=True).round(3)
+    )
 
     # Slider bounds must track the filtered row count -- a fixed min_value=10
     # both mislabels "top N" when fewer than N rows exist (head(N) silently
@@ -244,10 +254,22 @@ def render_flight_risk(risk: pd.DataFrame) -> None:
 
     st.dataframe(
         current.sort_values("predicted_hazard_score", ascending=False).head(top_n)[
-            ["EmployeeNumber", "Department", "JobRole", "predicted_hazard_score", "risk_percentile"]
+            [
+                "EmployeeNumber",
+                "Department",
+                "JobRole",
+                "predicted_hazard_score",
+                "risk_percentile_companywide",
+                "risk_percentile_in_filter",
+            ]
         ],
         width='stretch',
         hide_index=True,
+    )
+    st.caption(
+        "`risk_percentile_companywide` is fixed against all current employees regardless of "
+        "filter. `risk_percentile_in_filter` recomputes against whatever's currently filtered "
+        "to (e.g. within the selected department) -- use that one when comparing within a filter."
     )
 
 
