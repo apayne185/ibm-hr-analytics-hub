@@ -229,7 +229,17 @@ def main() -> None:
             "predicted_hazard_score": partial_hazard,
         }
     )
-    risk["risk_percentile"] = risk["predicted_hazard_score"].rank(pct=True).round(3)
+    # Percentile among current employees only (Attrition == 'No'), not the
+    # full population -- this column exists for the retention watch-list,
+    # and including the 237 people who've already left would deflate every
+    # current employee's percentile relative to the population that
+    # actually matters for "who do I have a retention conversation with."
+    # Leavers get NaN since the percentile isn't meaningful for them here.
+    still_here = risk["Attrition"] == "No"
+    risk["risk_percentile"] = pd.NA
+    risk.loc[still_here, "risk_percentile"] = (
+        risk.loc[still_here, "predicted_hazard_score"].rank(pct=True).round(3)
+    )
     risk["predicted_hazard_score"] = risk["predicted_hazard_score"].round(6)  # see coefficients rounding note above
     risk = risk.sort_values("predicted_hazard_score", ascending=False)
     risk.to_csv(RISK_SCORES_PATH, index=False)

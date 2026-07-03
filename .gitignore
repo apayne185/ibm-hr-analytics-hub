@@ -6,3 +6,9 @@ __pycache__/
 *.egg-info/
 .env
 *.db
+
+# NOTE: do NOT add data/processed/*.csv or *.json here. The dashboard's
+# cold-start bootstrap (dashboard/app.py: ensure_pipeline_artifacts) only
+# does a cheap SQLite rebuild when these already exist; if they were ever
+# gitignored, every fresh deploy (e.g. Streamlit Community Cloud) would
+# silently pay for a full survival-model refit on every cold start instead.

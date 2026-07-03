@@ -2,8 +2,10 @@
 
 An end-to-end people analytics pipeline: raw HR data → SQL analysis →
 survival-model attrition prediction → a live dashboard. Built as a
-hands-on project covering the SQL, Python, BI, and GenAI-assisted
-analysis workflow used in modern people-analytics roles.
+hands-on project covering the SQL, Python, and BI workflow used in
+modern people-analytics roles, developed with AI-assisted coding
+tooling throughout — every non-obvious design or modeling decision along
+the way is reviewed and recorded in [DECISIONS.md](DECISIONS.md).
 
 ## Data
 
@@ -74,6 +76,8 @@ at [docs/survival_model_findings.md](docs/survival_model_findings.md).
 
 ## Dashboard
 
+**Live demo:** *not yet deployed — see deployment steps below.*
+
 A Streamlit app (`dashboard/app.py`) ties everything together: Overview
 (headline KPIs), Attrition Drivers (interactive versions of the Phase 1
 SQL cuts), Survival Model (hazard-ratio forest plot + Kaplan-Meier
@@ -86,6 +90,23 @@ so it works from a fresh clone with no other setup.
 ```bash
 uv run streamlit run dashboard/app.py
 ```
+
+### Deploying to Streamlit Community Cloud
+
+`requirements.txt` (pip-installable, runtime deps only — no jupyter/pytest)
+is committed for this; deploying is a one-time manual step since it
+requires connecting your own GitHub account:
+
+1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
+2. "Create app" → pick this repo, branch `main`, main file path `dashboard/app.py`.
+   Open **Advanced settings** and confirm/set the Python version to **3.12**
+   — this repo requires it (`pyproject.toml`'s `requires-python`), and
+   `.python-version` is only a suggested default, not guaranteed to be
+   picked up automatically. Skipping this can fail the install outright.
+3. Deploy. First boot takes ~15-30s (installs dependencies, then runs the
+   self-bootstrap check — which only rebuilds `hr_analytics.db` from the
+   already-committed CSVs, not a full model refit, so it's fast).
+4. Update the live demo link above once you have the app's URL.
 
 ## Testing
 
@@ -106,6 +127,13 @@ uv run pytest tests/ -v
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/).
+
+**Just want the dashboard?** `uv sync && uv run streamlit run dashboard/app.py`
+is enough — every input file it needs is already committed, and it
+self-bootstraps anything missing (see Dashboard section above). The full
+sequence below is for regenerating or inspecting each phase's output
+directly (e.g. after changing a SQL query or a model covariate) rather
+than a required setup step.
 
 ```bash
 uv sync

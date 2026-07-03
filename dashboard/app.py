@@ -221,6 +221,7 @@ def render_flight_risk(risk: pd.DataFrame) -> None:
     )
 
     current = risk[risk["Attrition"] == "No"].copy()
+    current = current.rename(columns={"risk_percentile": "risk_percentile_companywide"})
 
     departments = ["All"] + sorted(current["Department"].unique().tolist())
     selected_dept = st.selectbox("Department", departments)
@@ -230,6 +231,15 @@ def render_flight_risk(risk: pd.DataFrame) -> None:
     if current.empty:
         st.info("No current employees match this filter.")
         return
+
+    # risk_percentile_companywide is fixed (computed once, among all current
+    # employees, in survival_model.py) and does NOT update with this filter --
+    # a department filter needs its own percentile column, or a viewer would
+    # reasonably assume the shown percentile is relative to what they just
+    # filtered to.
+    current["risk_percentile_in_filter"] = (
+        current["predicted_hazard_score"].rank(pct=True).round(3)
+    )
 
     # Slider bounds must track the filtered row count -- a fixed min_value=10
     # both mislabels "top N" when fewer than N rows exist (head(N) silently
@@ -244,10 +254,22 @@ def render_flight_risk(risk: pd.DataFrame) -> None:
 
     st.dataframe(
         current.sort_values("predicted_hazard_score", ascending=False).head(top_n)[
-            ["EmployeeNumber", "Department", "JobRole", "predicted_hazard_score", "risk_percentile"]
+            [
+                "EmployeeNumber",
+                "Department",
+                "JobRole",
+                "predicted_hazard_score",
+                "risk_percentile_companywide",
+                "risk_percentile_in_filter",
+            ]
         ],
         width='stretch',
         hide_index=True,
+    )
+    st.caption(
+        "`risk_percentile_companywide` is fixed against all current employees regardless of "
+        "filter. `risk_percentile_in_filter` recomputes against whatever's currently filtered "
+        "to (e.g. within the selected department) -- use that one when comparing within a filter."
     )
 
 
@@ -269,9 +291,24 @@ def render_hiring_pipeline(hiring: pd.DataFrame) -> None:
 
     trend = hiring.copy()
     trend["hire_month"] = pd.to_datetime(trend["start_date"]).dt.to_period("M").dt.to_timestamp()
-    monthly = trend.groupby("hire_month").size().reset_index(name="hires")
+    monthly = trend.groupby("hire_month").size()
+    # Reindex over every month in range and fill gaps with 0 -- without this,
+    # a line chart connects only the months with >=1 hire, which visually
+    # looks like a continuous trend through multi-year gaps instead of the
+    # sparse early history this synthetic data actually has (see
+    # sql/queries/10_monthly_hiring_trend.sql's month_spine for the same fix
+    # applied to the SQL version of this chart).
+    full_range = pd.period_range(monthly.index.min(), monthly.index.max(), freq="M").to_timestamp()
+    monthly = monthly.reindex(full_range, fill_value=0).reset_index()
+    monthly.columns = ["hire_month", "hires"]
+
     fig2 = px.line(monthly, x="hire_month", y="hires", title="Simulated hires per month over time (synthetic)")
     st.plotly_chart(fig2, width='stretch')
+    st.caption(
+        "Spans ~40 years because start_date is back-calculated from each employee's "
+        "YearsAtCompany (up to 40) — the sparse, mostly-zero early history is an "
+        "artifact of that, not a real hiring lull. See DECISIONS.md."
+    )
 
 
 def main() -> None:
