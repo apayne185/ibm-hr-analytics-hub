@@ -126,6 +126,13 @@ uv run pytest tests/ -v
 
 Requires [uv](https://docs.astral.sh/uv/).
 
+**Just want the dashboard?** `uv sync && uv run streamlit run dashboard/app.py`
+is enough — every input file it needs is already committed, and it
+self-bootstraps anything missing (see Dashboard section above). The full
+sequence below is for regenerating or inspecting each phase's output
+directly (e.g. after changing a SQL query or a model covariate) rather
+than a required setup step.
+
 ```bash
 uv sync
 uv run python -m src.hr_analytics.synthetic_hiring   # regenerate data/processed/*
