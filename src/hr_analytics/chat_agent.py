@@ -131,9 +131,17 @@ def _tool_get_attrition_rate(department: str | None = None, job_role: str | None
     return json.dumps(rows)
 
 
-def _tool_get_flight_risk_watchlist(department: str | None = None, top_n: int = DEFAULT_WATCHLIST_TOP_N) -> str:
+def _tool_get_flight_risk_watchlist(department: str | None = None, top_n: int | str = DEFAULT_WATCHLIST_TOP_N) -> str:
     if not RISK_PATH.exists():
         return json.dumps({"error": f"{RISK_PATH} not found -- run the survival_model pipeline stage first."})
+    # Tool-call arguments come from the model's JSON generation -- despite the
+    # "integer" type in GET_FLIGHT_RISK_WATCHLIST_SPEC, not every provider/model
+    # reliably emits a JSON number rather than a numeric string here. Coerce
+    # explicitly rather than let min(top_n, MAX_ROWS) raise TypeError on a str.
+    try:
+        top_n = int(top_n)
+    except (TypeError, ValueError):
+        top_n = DEFAULT_WATCHLIST_TOP_N
     risk = pd.read_csv(RISK_PATH)
     current = risk[risk["Attrition"] == "No"]
     if department:

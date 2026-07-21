@@ -187,6 +187,37 @@ def test_run_turn_flight_risk_watchlist_tool_call(db_path, empty_index, tmp_path
     assert "3" not in tool_message.tool_results[0].content  # leaver excluded
 
 
+def test_tool_get_flight_risk_watchlist_coerces_string_top_n(tmp_path, monkeypatch) -> None:
+    """Not every provider/model reliably emits a JSON number for an
+    "integer"-typed tool parameter -- top_n can arrive as the string "5"
+    rather than the int 5. Must not raise TypeError from min(top_n, MAX_ROWS)."""
+    risk_csv = tmp_path / "predicted_attrition_risk.csv"
+    pd.DataFrame(
+        [{"EmployeeNumber": i, "Department": "Sales", "JobRole": "Rep", "Attrition": "No", "predicted_hazard_score": float(i)} for i in range(10)]
+    ).to_csv(risk_csv, index=False)
+    monkeypatch.setattr(chat_agent, "RISK_PATH", risk_csv)
+
+    result = chat_agent._tool_get_flight_risk_watchlist(department=None, top_n="3")
+    import json
+
+    records = json.loads(result)
+    assert len(records) == 3
+
+
+def test_tool_get_flight_risk_watchlist_falls_back_on_unparseable_top_n(tmp_path, monkeypatch) -> None:
+    risk_csv = tmp_path / "predicted_attrition_risk.csv"
+    pd.DataFrame(
+        [{"EmployeeNumber": i, "Department": "Sales", "JobRole": "Rep", "Attrition": "No", "predicted_hazard_score": float(i)} for i in range(15)]
+    ).to_csv(risk_csv, index=False)
+    monkeypatch.setattr(chat_agent, "RISK_PATH", risk_csv)
+
+    result = chat_agent._tool_get_flight_risk_watchlist(department=None, top_n="not-a-number")
+    import json
+
+    records = json.loads(result)
+    assert len(records) == chat_agent.DEFAULT_WATCHLIST_TOP_N
+
+
 def test_run_turn_stops_at_max_tool_iterations(db_path, empty_index) -> None:
     """A model that never stops calling tools must not loop forever."""
     always_tool_use = ProviderResponse(
