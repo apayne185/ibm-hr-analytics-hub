@@ -113,10 +113,13 @@ overtime matter so much?"*.
   short setup message instead of an error.
 - **To enable it:**
   ```bash
-  uv sync --extra llm                    # installs anthropic + openai (opt-in, not a hard dependency)
-  export ANTHROPIC_API_KEY=sk-...        # or OPENAI_API_KEY; HR_CHAT_PROVIDER picks between them if both are set
+  uv sync --extra llm   # installs anthropic + openai + python-dotenv (opt-in, not a hard dependency)
+  echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env   # gitignored; or OPENAI_API_KEY, or export it directly
   uv run streamlit run dashboard/app.py
   ```
+  `HR_CHAT_PROVIDER` picks between them if both keys are set. `.env` is
+  loaded automatically (via `python-dotenv`, part of the `llm` extra) if
+  present — no need to `export` it manually every session.
 - **Design writeup:** the chunking strategy, why TF-IDF over dense
   embeddings/a vector DB, the SQL tool's two-layer safety design (an
   allowlist plus a genuinely read-only SQLite connection — not just the
