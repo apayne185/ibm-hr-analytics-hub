@@ -51,11 +51,24 @@ def ensure_pipeline_artifacts() -> None:
         survival_model.main()
 
 
+@st.cache_resource(ttl=60)
 def get_chat_provider():
     """Thin wrapper so this module doesn't hard-import llm_providers (and
     transitively anthropic/openai) at module top level -- keeps the import
     lazy the same way ensure_pipeline_artifacts() lazily imports the other
-    pipeline stages."""
+    pipeline stages.
+
+    Cached with a short TTL rather than uncached or cached forever (unlike
+    ensure_pipeline_artifacts()/build_chat_index() above, which run once per
+    process): Streamlit reruns the ENTIRE script -- every `with tabN:` body,
+    not just the currently-viewed tab -- on every single widget interaction
+    anywhere in the app. An uncached call here means dragging the Flight Risk
+    slider or changing any dropdown on an unrelated tab re-reads .env from
+    disk and reconstructs an SDK client every time, for zero benefit. A
+    60s TTL keeps that off the hot path while still picking up a .env/env
+    var fix within a minute -- no full app restart required, which matters
+    in practice: this is exactly the trial-and-error loop this API key setup
+    itself went through (wrong var name, then the extra not installed)."""
     import hr_analytics.llm_providers as llm_providers
 
     return llm_providers.get_provider()
