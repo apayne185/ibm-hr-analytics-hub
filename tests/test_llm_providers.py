@@ -13,6 +13,7 @@ from hr_analytics.llm_providers import (
     ToolCall,
     ToolResult,
     ToolSpec,
+    _load_dotenv_if_available,
     get_provider,
 )
 
@@ -92,3 +93,14 @@ def test_get_provider_degrades_gracefully_when_sdk_not_installed(monkeypatch) ->
     monkeypatch.setenv("HR_CHAT_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-key-for-test")
     assert get_provider() is None
+
+
+def test_load_dotenv_if_available_is_a_noop_without_python_dotenv() -> None:
+    """python-dotenv is part of the optional 'llm' extra -- this test
+    environment (like CI) never installs it, so this must be a silent no-op,
+    not an ImportError. Guards against a false pass if a future change
+    installs it as a hard dependency."""
+    import importlib.util
+
+    assert importlib.util.find_spec("dotenv") is None, "test assumes python-dotenv is not installed"
+    _load_dotenv_if_available()  # must not raise

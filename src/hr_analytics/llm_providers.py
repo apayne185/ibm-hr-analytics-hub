@@ -140,10 +140,23 @@ class FakeProvider:
         return self._responses.pop(0)
 
 
+def _load_dotenv_if_available() -> None:
+    """Load a .env file (repo root, or a parent directory) into os.environ if
+    python-dotenv is installed. python-dotenv is part of the optional 'llm'
+    extra, not a hard dependency, so this is a no-op (not an error) when it
+    isn't installed -- e.g. in CI, which never installs the llm extra."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv()
+
+
 def get_provider() -> LLMProvider | None:
     """Construct a provider from environment configuration, or None if none is
     configured / construction fails for any reason. Never raises -- the
     dashboard's graceful-degradation contract depends on that."""
+    _load_dotenv_if_available()
     choice = os.environ.get("HR_CHAT_PROVIDER")
     if choice is None:
         if os.environ.get("ANTHROPIC_API_KEY"):
