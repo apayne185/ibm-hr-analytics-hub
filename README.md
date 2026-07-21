@@ -130,9 +130,10 @@ overtime matter so much?"*.
 
 ### Deploying to Streamlit Community Cloud
 
-`requirements.txt` (pip-installable, runtime deps only — no jupyter/pytest)
-is committed for this; deploying is a one-time manual step since it
-requires connecting your own GitHub account:
+`requirements.txt` (pip-installable — includes `anthropic`/`openai`/
+`python-dotenv` so the deployed app can run Ask the Data too, not just
+tabs 1-5) is committed for this; deploying is a one-time manual step
+since it requires connecting your own GitHub account:
 
 1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
 2. "Create app" → pick this repo, branch `main`, main file path `dashboard/app.py`.
@@ -140,10 +141,21 @@ requires connecting your own GitHub account:
    — this repo requires it (`pyproject.toml`'s `requires-python`), and
    `.python-version` is only a suggested default, not guaranteed to be
    picked up automatically. Skipping this can fail the install outright.
-3. Deploy. First boot takes ~15-30s (installs dependencies, then runs the
+3. In the same Advanced settings screen (or later, in the deployed app's
+   Settings → **Secrets**), add:
+   ```toml
+   ANTHROPIC_API_KEY = "sk-ant-..."
+   ```
+   Streamlit Cloud's Secrets panel populates `st.secrets`, not `os.environ`
+   — unlike a local `.env` file. `dashboard/app.py` bridges the two
+   automatically (`_bridge_streamlit_secrets_to_env()`), so no other
+   config is needed, but the secret has to actually be set here — an
+   env var exported locally on your own machine has no effect on the
+   deployed app.
+4. Deploy. First boot takes ~15-30s (installs dependencies, then runs the
    self-bootstrap check — which only rebuilds `hr_analytics.db` from the
    already-committed CSVs, not a full model refit, so it's fast).
-4. Update the live demo link above once you have the app's URL.
+5. Update the live demo link above once you have the app's URL.
 
 ## Testing
 

@@ -9,6 +9,7 @@ regenerates them on first load so the app works from a fresh clone.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -71,7 +72,29 @@ def get_chat_provider():
     itself went through (wrong var name, then the extra not installed)."""
     import hr_analytics.llm_providers as llm_providers
 
+    _bridge_streamlit_secrets_to_env()
     return llm_providers.get_provider()
+
+
+def _bridge_streamlit_secrets_to_env() -> None:
+    """Streamlit Community Cloud's secrets management (the "Secrets" panel in
+    app settings, a secrets.toml under the hood) populates st.secrets, NOT
+    os.environ -- unlike a local .env file, which llm_providers.get_provider()
+    already reads via python-dotenv. Without this bridge, setting
+    ANTHROPIC_API_KEY in Streamlit Cloud's Secrets UI would silently do
+    nothing once deployed, since get_provider() only ever checks os.environ.
+    Copies the two keys it looks for into os.environ if present in
+    st.secrets and not already set -- never overwrites an explicitly-set
+    env var. try/except guards st.secrets itself, which raises if no
+    secrets.toml exists at all (the common case for local dev)."""
+    for key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "HR_CHAT_PROVIDER"):
+        if key in os.environ:
+            continue
+        try:
+            value = st.secrets[key]
+        except (KeyError, FileNotFoundError, st.errors.StreamlitSecretNotFoundError):
+            continue
+        os.environ[key] = value
 
 
 @st.cache_resource
@@ -370,6 +393,10 @@ def render_ask_the_data() -> None:
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+
+    if st.session_state.chat_history and st.button("Clear conversation"):
+        st.session_state.chat_history = []
+        st.rerun()
 
     for message in st.session_state.chat_history:
         if message.role in ("user", "assistant") and message.content:

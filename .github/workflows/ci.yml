@@ -31,9 +31,9 @@ jobs:
         run: |
           rm -rf /tmp/requirements-check && mkdir -p /tmp/requirements-check
           cp pyproject.toml uv.lock /tmp/requirements-check/
-          (cd /tmp/requirements-check && uv export --no-dev --no-hashes --no-emit-project --format requirements-txt -o requirements.txt)
+          (cd /tmp/requirements-check && uv export --no-dev --no-hashes --no-emit-project --extra llm --format requirements-txt -o requirements.txt)
           diff requirements.txt /tmp/requirements-check/requirements.txt || {
-            echo "requirements.txt is stale -- regenerate with: uv export --no-dev --no-hashes --no-emit-project --format requirements-txt -o requirements.txt"
+            echo "requirements.txt is stale -- regenerate with: uv export --no-dev --no-hashes --no-emit-project --extra llm --format requirements-txt -o requirements.txt"
             exit 1
           }
 
