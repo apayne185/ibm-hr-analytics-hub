@@ -51,6 +51,23 @@ def ensure_pipeline_artifacts() -> None:
         survival_model.main()
 
 
+def get_chat_provider():
+    """Thin wrapper so this module doesn't hard-import llm_providers (and
+    transitively anthropic/openai) at module top level -- keeps the import
+    lazy the same way ensure_pipeline_artifacts() lazily imports the other
+    pipeline stages."""
+    import hr_analytics.llm_providers as llm_providers
+
+    return llm_providers.get_provider()
+
+
+@st.cache_resource
+def build_chat_index():
+    import hr_analytics.rag as rag
+
+    return rag.build_index()
+
+
 @st.cache_data
 def load_employees() -> pd.DataFrame:
     with sqlite3.connect(DB_PATH) as conn:
@@ -311,6 +328,68 @@ def render_hiring_pipeline(hiring: pd.DataFrame) -> None:
     )
 
 
+def render_ask_the_data() -> None:
+    st.header("Ask the Data")
+    st.caption(
+        "A tool-calling agent that retrieves from this project's own docs (RAG) and "
+        "queries the SQL database as tools to answer questions. See DECISIONS.md for "
+        "the RAG/tool-safety/context-window design."
+    )
+
+    provider = get_chat_provider()
+    if provider is None:
+        st.info(
+            "Ask the Data requires an LLM API key. Set `ANTHROPIC_API_KEY` or "
+            "`OPENAI_API_KEY` as an environment variable (and install the extra: "
+            "`uv sync --extra llm`) to enable this tab. The rest of the dashboard "
+            "works normally without it."
+        )
+        return
+
+    import hr_analytics.chat_agent as chat_agent
+    from hr_analytics.llm_providers import Message
+
+    try:
+        index = build_chat_index()
+    except Exception as exc:
+        st.error(f"Could not build the retrieval index: {exc}")
+        return
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    for message in st.session_state.chat_history:
+        if message.role in ("user", "assistant") and message.content:
+            with st.chat_message(message.role):
+                st.write(message.content)
+
+    user_input = st.chat_input("Ask about attrition, hiring, or the model...")
+    if user_input:
+        with st.chat_message("user"):
+            st.write(user_input)
+        try:
+            with st.spinner("Thinking..."):
+                reply, snapshot = chat_agent.run_turn(provider, index, st.session_state.chat_history, user_input)
+        except Exception as exc:
+            st.error(f"The model call failed: {exc}")
+            return
+
+        with st.chat_message("assistant"):
+            st.write(reply.content)
+
+        st.session_state.chat_history.append(Message(role="user", content=user_input))
+        st.session_state.chat_history.append(reply)
+
+        with st.expander("What the model actually saw"):
+            st.caption(f"~{snapshot.approx_input_tokens} tokens (rough char/4 estimate, not exact tokenization)")
+            st.text_area("System prompt (incl. retrieved context)", snapshot.system, height=200)
+            if snapshot.retrieved_chunks:
+                st.caption("Retrieved chunks:")
+                for chunk, score in snapshot.retrieved_chunks:
+                    st.text(f"{chunk.doc_id} § {chunk.section} (relevance {score:.2f})")
+            st.caption(f"{len(snapshot.messages)} message(s) in bounded history sent to the model")
+
+
 def main() -> None:
     st.set_page_config(page_title="IBM HR Analytics Hub", layout="wide")
     st.title("IBM HR Analytics Hub")
@@ -324,8 +403,15 @@ def main() -> None:
     coefficients = load_coefficients()
     metrics = load_metrics()
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["Overview", "Attrition Drivers", "Survival Model", "Flight Risk Watchlist", "Hiring Pipeline"]
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+        [
+            "Overview",
+            "Attrition Drivers",
+            "Survival Model",
+            "Flight Risk Watchlist",
+            "Hiring Pipeline",
+            "Ask the Data",
+        ]
     )
     with tab1:
         render_overview(employees)
@@ -337,6 +423,17 @@ def main() -> None:
         render_flight_risk(risk)
     with tab5:
         render_hiring_pipeline(hiring)
+    with tab6:
+        # Isolated in its own try/except: Streamlit renders every `with tabN:`
+        # block in one script pass, so an uncaught exception here would take
+        # tabs 1-5 down with it. get_chat_provider() never raises (returns
+        # None), and the index build / live model call inside
+        # render_ask_the_data() are each wrapped too -- this is the outermost
+        # backstop in case something upstream of those still slips through.
+        try:
+            render_ask_the_data()
+        except Exception as exc:
+            st.error(f"Ask the Data hit an unexpected error: {exc}")
 
 
 if __name__ == "__main__":
