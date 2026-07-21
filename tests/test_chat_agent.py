@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -90,6 +92,35 @@ def test_run_turn_get_attrition_rate_tool_call(db_path, empty_index) -> None:
     tool_messages = [m for m in second_call_messages if m.role == "tool"]
     assert len(tool_messages) == 1
     assert "attrition_rate_pct" in tool_messages[0].tool_results[0].content
+
+
+def test_tool_get_attrition_rate_actually_queries_the_isolated_test_db(db_path) -> None:
+    """Regression test for a real bug: _tool_get_attrition_rate originally
+    called sql_tool.execute_parameterized(sql, params) with no db_path
+    argument, so it silently used execute_parameterized's *default*
+    parameter value -- which Python binds once at function-definition time,
+    not dynamically re-read from sql_tool.DB_PATH on each call. A test
+    fixture's monkeypatch.setattr(sql_tool, "DB_PATH", ...) therefore had no
+    effect on this tool: it was quietly querying the real production
+    data/processed/hr_analytics.db instead of the isolated per-test db.
+
+    The other test above (test_run_turn_get_attrition_rate_tool_call) didn't
+    catch this because it only asserts "attrition_rate_pct" is a substring
+    of the result -- true regardless of which database answered it. This
+    test uses a small fixture db with a deliberately unrealistic 100%
+    Sales attrition rate that the real production db could never produce,
+    so it fails loudly if the tool ever queries the wrong database again."""
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("DELETE FROM employees WHERE department = 'Sales'")
+        conn.executemany(
+            "INSERT INTO employees (employee_number, department, attrition) VALUES (?, 'Sales', 'Yes')",
+            [(90000 + i,) for i in range(5)],
+        )
+        conn.commit()
+
+    result = chat_agent._tool_get_attrition_rate(department="Sales")
+    records = json.loads(result)
+    assert records[0]["attrition_rate_pct"] == 100.0
 
 
 def test_run_turn_search_docs_accumulates_retrieved_chunks(db_path, sample_index) -> None:

@@ -382,3 +382,45 @@ ends up in a query, prefer parameter binding over string interpolation
 even in a context that already has another safety layer (here, the
 read-only connection). Layers should be independent, not load-bearing on
 each other.
+
+## 2026-07-22 — Ship the chat feature to the deployed dashboard, bridge Streamlit secrets
+
+**Decision:** now that a real Anthropic key was live-tested and confirmed
+working (see the provider-agnostic abstraction entry above, which
+explicitly deferred this exact choice), `requirements.txt` now includes
+the `llm` extra (`anthropic`, `openai`, `python-dotenv`) via
+`uv export --extra llm`, and `dashboard/app.py` gained
+`_bridge_streamlit_secrets_to_env()`.
+
+**Why:** Streamlit Community Cloud's Secrets panel populates `st.secrets`,
+not `os.environ` — confirmed by testing both the missing-`secrets.toml`
+case (raises `StreamlitSecretNotFoundError`) and the
+key-present-but-different-key-requested case (raises `KeyError`) directly,
+not assumed from documentation. Without the bridge, a correctly-set
+Streamlit Cloud secret would have silently done nothing, since
+`llm_providers.get_provider()` only ever reads `os.environ` — the tab
+would show the same "set an API key" message whether or not a secret was
+configured, which is actively misleading (looks like a key problem when
+it's actually a wiring problem).
+
+**How it works:** `_bridge_streamlit_secrets_to_env()` copies
+`ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`HR_CHAT_PROVIDER` from `st.secrets`
+into `os.environ` if present and not already set, before calling
+`get_provider()` — never overwrites an explicitly-set env var. Kept in
+`dashboard/app.py`, not `llm_providers.py`: the provider abstraction
+should stay Streamlit-agnostic (it's meant to be usable outside a
+Streamlit context, e.g. a future CLI), so the Streamlit-specific bridging
+lives at the Streamlit-specific integration point.
+
+**Verified, not assumed:** installed `requirements.txt` into a clean venv
+via plain `pip install` (matching Streamlit Cloud's own install
+mechanism, not `uv`) and confirmed the dashboard, including Ask the
+Data, works from it. Wrote a real `.streamlit/secrets.toml` in a scratch
+directory and confirmed `_bridge_streamlit_secrets_to_env()` genuinely
+copies the value into `os.environ`, not just that it doesn't crash.
+
+**How to apply:** the CI `requirements.txt` drift-check
+(`.github/workflows/ci.yml`) was updated to export with `--extra llm` to
+match — if that ever needs regenerating by hand, use
+`uv export --no-dev --no-hashes --no-emit-project --extra llm --format requirements-txt -o requirements.txt`,
+not the shorter command from the earlier entries in this log.
