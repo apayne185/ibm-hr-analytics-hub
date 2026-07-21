@@ -83,13 +83,50 @@ A Streamlit app (`dashboard/app.py`) ties everything together: Overview
 SQL cuts), Survival Model (hazard-ratio forest plot + Kaplan-Meier
 curves, sourced from `data/processed/survival_model_metrics.json` rather
 than hardcoded), Flight Risk Watchlist (filterable per-employee risk
-table), and Hiring Pipeline (clearly labelled as synthetic). It rebuilds
+table), Hiring Pipeline (clearly labelled as synthetic), and Ask the
+Data (a RAG + tool-calling chat agent — see below). It rebuilds
 `data/processed/*` and `docs/figures/*` on first run if they're missing,
 so it works from a fresh clone with no other setup.
 
 ```bash
 uv run streamlit run dashboard/app.py
 ```
+
+### Ask the Data (RAG + agent tool-use)
+
+The 6th tab is a chat agent, not a scripted view: it retrieves relevant
+context from this project's own docs (`docs/sql_findings.md`,
+`docs/survival_model_findings.md`, `docs/ph_assumptions_check.txt`,
+`DECISIONS.md` — TF-IDF + cosine similarity, chunked on each doc's own
+section headers) and calls into the SQL database as tools
+(`src/hr_analytics/sql_tool.py` — a constrained, read-only query tool,
+plus two parameterized tools for the most common questions) to answer
+questions like *"what's the attrition rate in Sales?"* or *"why does
+overtime matter so much?"*.
+
+- **Provider-agnostic:** `src/hr_analytics/llm_providers.py` defines a
+  vendor-neutral interface (`AnthropicProvider`, `OpenAIProvider`, and a
+  `FakeProvider` used throughout the test suite) — nothing else in the
+  app codes against a specific vendor's API shape.
+- **Zero API key, zero crash:** every one of the other 5 tabs works
+  identically with no LLM configured. Without a key, this tab shows a
+  short setup message instead of an error.
+- **To enable it:**
+  ```bash
+  uv sync --extra llm   # installs anthropic + openai + python-dotenv (opt-in, not a hard dependency)
+  echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env   # gitignored; or OPENAI_API_KEY, or export it directly
+  uv run streamlit run dashboard/app.py
+  ```
+  `HR_CHAT_PROVIDER` picks between them if both keys are set. `.env` is
+  loaded automatically (via `python-dotenv`, part of the `llm` extra) if
+  present — no need to `export` it manually every session.
+- **Design writeup:** the chunking strategy, why TF-IDF over dense
+  embeddings/a vector DB, the SQL tool's two-layer safety design (an
+  allowlist plus a genuinely read-only SQLite connection — not just the
+  allowlist), and the explicit context-window budgets are all documented
+  in [DECISIONS.md](DECISIONS.md). An in-app "What the model actually
+  saw" panel shows the assembled prompt, retrieved chunks, and an
+  approximate token count for every turn.
 
 ### Deploying to Streamlit Community Cloud
 
@@ -113,12 +150,18 @@ requires connecting your own GitHub account:
 `tests/` (pytest) covers the data-generation invariants (date ordering,
 reproducibility under a fixed seed), the survival model (duration/event
 validity, feature-column correctness), the SQLite loader (atomic-write
-behavior under a simulated mid-load failure), and every SQL query
-(runs cleanly + a regression test for the month-spine fix in query 10).
-CI (`.github/workflows/ci.yml`) runs the suite on every push/PR, then
-rebuilds the full pipeline end-to-end and fails the build if regenerating
-it produces any diff against what's committed — the same class of
-staleness bug caught twice during development (see DECISIONS.md).
+behavior under a simulated mid-load failure), every SQL query (runs
+cleanly + a regression test for the month-spine fix in query 10), and
+the chat agent — provider abstraction, SQL tool safety (including a real
+injection-payload test), RAG chunking/retrieval, context-window bounding,
+and the full multi-turn tool-calling loop via a scripted `FakeProvider`.
+None of this requires an API key or network access — that's a deliberate
+design constraint of the chat agent's test suite, not just this repo's
+general testing philosophy. CI (`.github/workflows/ci.yml`) runs the
+suite on every push/PR, then rebuilds the full pipeline end-to-end and
+fails the build if regenerating it produces any diff against what's
+committed — the same class of staleness bug caught twice during
+development (see DECISIONS.md).
 
 ```bash
 uv run pytest tests/ -v
@@ -149,8 +192,9 @@ uv run streamlit run dashboard/app.py                # launch the dashboard
 - [x] Phase 0 — raw data in place, synthetic hiring pipeline extension generated
 - [x] Phase 1 — SQL analysis (SQLite db + 10 business-question queries)
 - [x] Phase 2 — survival-model attrition prediction (Cox PH, per-employee risk scores)
-- [x] Phase 3 — dashboard (Streamlit, 5 tabs, self-bootstrapping)
+- [x] Phase 3 — dashboard (Streamlit, 6 tabs, self-bootstrapping)
 - [x] Tests + CI (pytest suite, GitHub Actions pipeline-reproducibility check)
+- [x] Ask the Data — RAG + tool-calling chat agent, provider-agnostic, zero-network test suite
 
 ## License
 
