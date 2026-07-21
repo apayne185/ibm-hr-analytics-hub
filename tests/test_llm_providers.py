@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
@@ -16,6 +19,9 @@ from hr_analytics.llm_providers import (
     _load_dotenv_if_available,
     get_provider,
 )
+
+_ANTHROPIC_INSTALLED = importlib.util.find_spec("anthropic") is not None
+_DOTENV_INSTALLED = importlib.util.find_spec("dotenv") is not None
 
 
 def test_fake_provider_returns_scripted_responses_in_order() -> None:
@@ -76,31 +82,38 @@ def test_multi_turn_tool_use_then_end_turn_sequence() -> None:
 
 
 def test_get_provider_returns_none_with_no_env_configured(monkeypatch) -> None:
+    import hr_analytics.llm_providers as llm_providers
+
+    # Isolate from whatever .env file happens to exist in this checkout (e.g.
+    # a developer's real local .env for live-testing the chat tab) -- without
+    # this, get_provider()'s own _load_dotenv_if_available() call would
+    # silently reload ANTHROPIC_API_KEY right after monkeypatch.delenv()
+    # deletes it below, making this test's outcome depend on ambient
+    # filesystem state instead of the env vars it's actually testing.
+    monkeypatch.setattr(llm_providers, "_load_dotenv_if_available", lambda: None)
     monkeypatch.delenv("HR_CHAT_PROVIDER", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert get_provider() is None
 
 
+@pytest.mark.skipif(
+    _ANTHROPIC_INSTALLED,
+    reason="only meaningful when anthropic is absent (matches CI); this checkout has the 'llm' extra installed",
+)
 def test_get_provider_degrades_gracefully_when_sdk_not_installed(monkeypatch) -> None:
-    """anthropic/openai are optional extras -- this test environment (like CI)
-    never installs them, so get_provider() must return None instead of raising
-    ImportError. This only proves something if the SDK is actually absent, so
-    guard against a false pass if a future change installs it as a hard dep."""
-    import importlib.util
-
-    assert importlib.util.find_spec("anthropic") is None, "test assumes anthropic is not installed"
+    """anthropic/openai are optional extras -- CI never installs them, so
+    get_provider() must return None instead of raising ImportError."""
     monkeypatch.setenv("HR_CHAT_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-key-for-test")
     assert get_provider() is None
 
 
+@pytest.mark.skipif(
+    _DOTENV_INSTALLED,
+    reason="only meaningful when python-dotenv is absent (matches CI); this checkout has the 'llm' extra installed",
+)
 def test_load_dotenv_if_available_is_a_noop_without_python_dotenv() -> None:
-    """python-dotenv is part of the optional 'llm' extra -- this test
-    environment (like CI) never installs it, so this must be a silent no-op,
-    not an ImportError. Guards against a false pass if a future change
-    installs it as a hard dependency."""
-    import importlib.util
-
-    assert importlib.util.find_spec("dotenv") is None, "test assumes python-dotenv is not installed"
+    """python-dotenv is part of the optional 'llm' extra -- CI never installs
+    it, so this must be a silent no-op, not an ImportError."""
     _load_dotenv_if_available()  # must not raise
