@@ -149,6 +149,18 @@ def render_overview(employees: pd.DataFrame) -> None:
     c3.metric("Leavers", f"{leavers:,}")
     c4.metric("Avg. tenure", f"{avg_tenure:.1f} yrs")
 
+    try:
+        import hr_analytics.excel_report as excel_report
+
+        st.download_button(
+            "Download Executive Report (.xlsx)",
+            data=excel_report.generate_report(output_path=None),
+            file_name="HR_Executive_Report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except Exception as exc:
+        st.caption(f"Executive report unavailable: {exc}")
+
     by_dept = (
         employees.groupby("department")["attrition"]
         .apply(lambda s: 100 * (s == "Yes").mean())
