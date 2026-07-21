@@ -261,3 +261,124 @@ guaranteed bit-identical to a future re-run.
 **How to apply:** don't add new tracked files derived from an iterative
 model fit to a strict CI diff check. Test model outputs by asserting
 properties/tolerance bounds, not exact values.
+
+## 2026-07-21 — Provider-agnostic LLM abstraction for the chat agent
+
+**Decision:** built the "Ask the Data" chat tab against a thin `Protocol`
+(`LLMProvider.complete()`, `src/hr_analytics/llm_providers.py`) using
+vendor-neutral `Message`/`ToolCall`/`ToolResult`/`ToolSpec` dataclasses,
+instead of coding directly against Anthropic's or OpenAI's SDK shape.
+`AnthropicProvider`/`OpenAIProvider` each translate to/from their own
+wire format internally and lazy-import their SDK inside `__init__`, not
+at module top level. A `FakeProvider` scripts a sequence of responses
+for deterministic, zero-network multi-turn tool-calling tests.
+
+**Why:** no LLM API credentials were available at build time, and the
+explicit goal was a feature that's fully testable without any network
+call or API key — matching this repo's established test philosophy (see
+the CI-reproducibility entries above: don't assert on anything
+non-deterministic). Coding against one vendor's SDK would have made that
+impossible without a live key. The lazy-import pattern is what lets
+`anthropic`/`openai` be an opt-in extra (`uv sync --extra llm`) rather
+than a hard dependency — CI never installs either package, so CI itself
+enforces that the import discipline doesn't regress: an eager top-level
+`import anthropic` would break the entire test suite immediately, not
+just a targeted test.
+
+**How to apply:** wiring up a real provider live (and choosing Anthropic
+vs. OpenAI as the first one) is a separate, later step once API
+credentials exist — this abstraction supports both equally, so that
+choice is deferred, not blocked on anything built here.
+
+## 2026-07-21 — TF-IDF over dense embeddings or a vector DB for RAG retrieval
+
+**Decision:** `src/hr_analytics/rag.py` retrieves from this project's
+own docs using `scikit-learn`'s `TfidfVectorizer` + in-memory cosine
+similarity — not dense/neural embeddings, not FAISS/Chroma/pgvector.
+
+**Why:** the corpus is a handful of markdown files (~30-60 chunks after
+header-based chunking) — small enough that a sparse matrix held in a
+Python object genuinely *is* the index at this scale; a vector database
+here would be the kind of over-engineering this project has deliberately
+avoided elsewhere (see the SQLite-not-Postgres and
+lognormal-not-a-full-simulator-package decisions above). More
+specifically: a dense-embedding model (e.g. `sentence-transformers`)
+needs to download model weights the first time it's used, which is a
+disguised network dependency that would silently break the "zero network
+calls in tests" requirement the whole chat feature was built around.
+TF-IDF needs no download, is fully deterministic, and the docs are
+technical/keyword-heavy (`"OverTime"`, `"concordance index"`, `"Sales
+Representative"`) — exactly the profile where lexical matching works
+well and dense embeddings' advantage (capturing semantic similarity
+between differently-worded but related concepts) matters least.
+
+**How to apply:** if the doc corpus grows substantially (many more files,
+or longer documents), reconsider dense local embeddings (accepting the
+one-time model download as a setup step, not a test-time dependency) and,
+past a few thousand chunks, a real vector index. Neither is justified at
+the current scale.
+
+## 2026-07-21 — SQL tool safety: two independent layers, not one
+
+**Decision:** `src/hr_analytics/sql_tool.py` gives the chat agent
+database access through two layers that don't depend on each other:
+`validate_query()` (a fast-fail allowlist — single `SELECT`/`WITH`
+statement only, rejects DDL/DML/PRAGMA/ATTACH, forces `LIMIT 50`) and a
+SQLite connection opened via the `mode=ro` URI, which is physically
+incapable of writing regardless of what SQL text reaches it.
+
+**Why:** considered two alternatives first. A purely parameterized tool
+set (fixed functions like `get_attrition_rate(department)`) is the
+safest option but can't answer genuinely open-ended questions or
+follow-ups — it either explodes combinatorially trying to cover every
+possible question shape, or just can't answer some of them. Unconstrained
+free-form SQL generation handed straight to `sqlite3.connect()` is
+flexible but hands a network-facing LLM real query power with only a
+system-prompt instruction as a guardrail — not a real safety boundary.
+The resolution was to offer **both**: `get_attrition_rate` and
+`get_flight_risk_watchlist` as parameterized tools for the highest-
+frequency questions (using `execute_parameterized()`'s `?` placeholder
+binding, not string interpolation, even though the values involved are
+low-risk — see the entry below), and `sql_query` as a constrained
+free-form fallback for everything else.
+
+The read-only URI connection, not the regex allowlist, is the actual
+security boundary — verified by `test_connection_is_physically_read_only`,
+which bypasses `validate_query()` entirely and confirms a write still
+fails at the `sqlite3.OperationalError` level. The regex allowlist exists
+to give the calling LLM a fast, readable error it can self-correct from,
+not as the primary defense.
+
+**How to apply:** any new tool that touches the database should go
+through one of `sql_tool.py`'s two entry points
+(`run_read_only_query()` for untrusted SQL text,
+`execute_parameterized()` for trusted SQL text with untrusted bound
+values) — never open a fresh unguarded connection.
+
+## 2026-07-21 — Caught during build: parameterized tools still need placeholders, not interpolation
+
+**Decision:** while implementing `chat_agent.py`'s `get_attrition_rate`
+and `get_flight_risk_watchlist` tools, initially planned to
+string-interpolate the LLM-supplied `department`/`job_role` arguments
+directly into a SQL `WHERE` clause. Caught this before shipping it and
+added `sql_tool.execute_parameterized()` (binds values via `?`
+placeholders) instead, splitting `sql_tool.py`'s connection logic into a
+shared internal helper with two named entry points making the safety
+contract explicit at each call site.
+
+**Why:** the read-only connection means an interpolated value can't
+cause a write, but it can still corrupt the query's `WHERE`-clause logic
+— e.g. a `department` argument of `"Sales' OR '1'='1"` would silently
+widen the filter to match every row instead of erroring or matching
+nothing. Verified this was a real, working issue with
+`test_execute_parameterized_does_not_let_a_value_alter_query_logic`,
+which passes a classic injection payload as a bound value and asserts it
+matches zero rows (treated as a literal string), then confirmed the fix
+by checking the same payload would have broken a naive f-string version.
+
+**How to apply:** this is a general lesson, not just for this tool —
+when a value that ultimately came from an LLM (or any untrusted source)
+ends up in a query, prefer parameter binding over string interpolation
+even in a context that already has another safety layer (here, the
+read-only connection). Layers should be independent, not load-bearing on
+each other.
