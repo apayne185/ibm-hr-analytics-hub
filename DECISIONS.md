@@ -458,11 +458,29 @@ suite reloads what it wrote and asserts real cell values and that
 conditional-formatting rules were actually attached — one dependency,
 symmetric read/write.
 
-**Determinism, found the hard way:** the workbook needed to be
-byte-reproducible to commit it and add it to CI's existing
-deterministic-diff-check (the same mechanism covering `sql/results/`
-etc.). Two independent, non-obvious sources of non-determinism, both
-found by actually regenerating twice and diffing bytes rather than
+**Determinism, found the hard way -- and where it stops mattering:**
+initially generated the workbook byte-reproducibly (verified same-machine)
+intending to add it to CI's exact-diff check, the same mechanism covering
+`sql/results/`. But the workbook reads `predicted_attrition_risk.csv` and
+`survival_model_coefficients.csv` -- the exact model-fitted outputs this
+project already excluded from that same exact-diff check twice (see the
+CI-reproducibility entries above) because `CoxPHFitter`'s optimizer
+converges to meaningfully different values across BLAS backends/CI
+runners. Same-machine byte-reproducibility does not imply cross-platform
+reproducibility for anything downstream of those files. Caught this
+before wiring it into CI (not after a red build) and gave
+`reports/HR_Executive_Report.xlsx` the same treatment as
+`docs/figures/*.png`: existence + minimum-size check in
+`.github/workflows/ci.yml`, not exact-diff.
+
+The determinism fix itself was still worth doing and is still real --
+it guarantees identical output for identical input data on one machine
+(meaningful for local dev and for the file actually being committed at
+all, rather than churning on every regeneration) -- it just doesn't
+extend the guarantee to "identical across every possible BLAS backend,"
+which nothing downstream of the survival model currently does. Two
+independent, non-obvious sources of non-determinism in the fix itself,
+both found by actually regenerating twice and diffing bytes rather than
 assuming a `wb.properties.modified = <fixed value>` assignment would
 hold:
 1. `openpyxl.writer.excel.save_workbook()` unconditionally overwrites

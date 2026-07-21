@@ -46,14 +46,23 @@ jobs:
           uv run python -m src.hr_analytics.load_db
           uv run python -m src.hr_analytics.run_queries
           uv run python -m src.hr_analytics.survival_model
+          uv run python -m src.hr_analytics.excel_report
 
-      - name: Check regenerated PNGs still exist and are non-trivial
+      - name: Check regenerated PNGs/xlsx still exist and are non-trivial
         # PNG bytes aren't guaranteed reproducible across platforms (font
         # rendering/anti-aliasing and embedded library-version metadata can
         # differ even with identical underlying data), so these are checked
         # for existence/size, not byte-for-byte equality like the rest.
+        # HR_Executive_Report.xlsx is deliberately excluded from the exact-diff
+        # check below for the same reason survival_model_coefficients.csv and
+        # predicted_attrition_risk.csv already are (see DECISIONS.md): it reads
+        # those same BLAS-sensitive, cross-platform-non-deterministic model
+        # outputs, so its own byte-reproducibility (verified same-machine, see
+        # the "Automated Excel executive report" DECISIONS.md entry) doesn't
+        # carry over across CI runners -- exact-diffing it here would repeat
+        # the mistake this project already made and fixed twice.
         run: |
-          for f in docs/figures/km_overall.png docs/figures/km_by_overtime.png; do
+          for f in docs/figures/km_overall.png docs/figures/km_by_overtime.png reports/HR_Executive_Report.xlsx; do
             size=$(stat -c%s "$f")
             echo "$f: $size bytes"
             if [ "$size" -lt 10000 ]; then
