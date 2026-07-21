@@ -127,7 +127,7 @@ def _tool_get_attrition_rate(department: str | None = None, job_role: str | None
         "ROUND(100.0 * SUM(CASE WHEN attrition = 'Yes' THEN 1 ELSE 0 END) / COUNT(*), 1) AS attrition_rate_pct "
         f"FROM employees {where}"
     )
-    rows = sql_tool.execute_parameterized(sql, tuple(params))
+    rows = sql_tool.execute_parameterized(sql, tuple(params), db_path=sql_tool.DB_PATH)
     return json.dumps(rows)
 
 
@@ -152,7 +152,7 @@ def _tool_get_flight_risk_watchlist(department: str | None = None, top_n: int | 
 
 
 def _tool_sql_query(sql: str) -> str:
-    rows = sql_tool.run_read_only_query(sql)
+    rows = sql_tool.run_read_only_query(sql, db_path=sql_tool.DB_PATH)
     return json.dumps(rows)
 
 
