@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import hr_analytics.load_db as load_db
-from hr_analytics.sql_tool import UnsafeQueryError, run_read_only_query, validate_query
+from hr_analytics.sql_tool import UnsafeQueryError, execute_parameterized, run_read_only_query, validate_query
 
 
 @pytest.fixture(scope="module")
@@ -103,3 +103,21 @@ def test_connection_is_physically_read_only(db_path: Path) -> None:
 def test_run_read_only_query_rejects_unsafe_sql_before_touching_db(db_path: Path) -> None:
     with pytest.raises(UnsafeQueryError):
         run_read_only_query("DELETE FROM employees", db_path)
+
+
+def test_execute_parameterized_binds_values_safely(db_path: Path) -> None:
+    rows = execute_parameterized(
+        "SELECT COUNT(*) AS n FROM employees WHERE department = ?", ("Sales",), db_path
+    )
+    assert rows[0]["n"] > 0
+
+
+def test_execute_parameterized_does_not_let_a_value_alter_query_logic(db_path: Path) -> None:
+    """A classic injection payload passed as a *bound value* must be treated as
+    a literal string to match against, not SQL syntax -- proving placeholders
+    (not string interpolation) are actually being used under the hood."""
+    malicious = "Sales' OR '1'='1"
+    rows = execute_parameterized(
+        "SELECT COUNT(*) AS n FROM employees WHERE department = ?", (malicious,), db_path
+    )
+    assert rows[0]["n"] == 0  # no department literally named "Sales' OR '1'='1"
