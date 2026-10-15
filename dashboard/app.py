@@ -227,6 +227,14 @@ def render_survival_model(coefficients: pd.DataFrame, metrics: dict) -> None:
         f"{metrics['concordance_cv_mean']:.3f}",
         help="Out-of-sample estimate — the one to trust for generalization.",
     )
+    if "concordance_cv_without_tenure_derived" in metrics:
+        st.caption(
+            "Tenure-leakage check: YearsSinceLastPromotion is bounded by the duration (YearsAtCompany), "
+            f"so it partly encodes tenure. CV concordance without it: "
+            f"{metrics['concordance_cv_without_tenure_derived']:.3f}; also without JobLevel, income and "
+            f"stock level (snapshots that accrue with tenure): {metrics['concordance_cv_without_tenure_linked']:.3f}. "
+            "See DECISIONS.md."
+        )
 
     coef = coefficients.sort_values("exp(coef)", ascending=True).copy()
     # exp(coef) is the hazard multiplier per one-unit increase in the
