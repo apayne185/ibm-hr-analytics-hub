@@ -507,3 +507,45 @@ determinism explicitly (`generate_report()` twice, compare bytes) before
 assuming the existing fix still covers whatever changed — don't assume
 byte-reproducibility carries over automatically to new content or a
 library upgrade.
+
+## 2026-10-15 — Tenure leakage in the concordance index
+
+**Decision:** keep the headline Cox model's covariate set unchanged, but
+report its concordance alongside two leakage-checked variants, recomputed
+on every run by `tenure_leakage_sensitivity()` in `survival_model.py` and
+written to `survival_model_metrics.json` (shown on the dashboard's
+Survival Model tab and in `docs/survival_model_findings.md`).
+
+**Why:** the duration is `YearsAtCompany`, so any covariate partly derived
+from tenure lets the model rank employees by tenure using tenure, which
+inflates the concordance index. `YearsInCurrentRole`,
+`YearsWithCurrManager` and `TotalWorkingYears` were already excluded;
+adding them back pushes CV concordance from 0.860 to ~0.930, which shows
+how large the effect can be. `YearsSinceLastPromotion` was included,
+though, and it is always ≤ `YearsAtCompany`. Results (5-fold CV):
+
+| Covariate set | CV concordance | OverTime HR |
+|---|---|---|
+| Full model | 0.860 | 2.16 |
+| Without `YearsSinceLastPromotion` | 0.851 | 2.16 |
+| Also without `JobLevel`, `log_monthly_income`, `StockOptionLevel` | 0.747 | 2.13 |
+
+The second group isn't derived from tenure, but each is an
+end-of-observation snapshot that tends to rise with it (r ≈ 0.5 for
+level and income), so 0.747 is a conservative lower bound rather than
+the "true" score. This one cross-sectional extract can't separate real
+signal from tenure leakage in those columns.
+
+**Why not just drop `YearsSinceLastPromotion`:** it costs only 0.009
+concordance and leaves every headline hazard ratio where it is, so the
+leakage it adds is small. Reporting it beats quietly changing the model
+that every downstream artifact (risk scores, Excel report, dashboard) is
+built on. Its counter-intuitive protective sign and its failed PH test
+are both consistent with it being partly a tenure proxy, and the findings
+doc now says so.
+
+**How to apply:** before adding a covariate, check whether it is bounded
+by or accrues with `YearsAtCompany`. If it is, either exclude it or add
+it to `TENURE_DERIVED_COVARIATES` / `TENURE_ACCRUING_COVARIATES` so the
+sensitivity check covers it. Quote the leakage-checked numbers whenever
+the 0.860 is quoted.

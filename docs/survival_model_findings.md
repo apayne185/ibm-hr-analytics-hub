@@ -1,5 +1,9 @@
 # Survival Model: Attrition Prediction
 
+All findings here describe patterns **in this dataset**, which is
+fictional (created by IBM data scientists), not real-world facts about
+attrition.
+
 Model: `src/hr_analytics/survival_model.py`, a Cox Proportional Hazards
 model (`lifelines.CoxPHFitter`, `penalizer=0.1`). Full coefficient table
 in `data/processed/survival_model_coefficients.csv`; per-employee risk
@@ -14,6 +18,26 @@ that correctly orders which of two employees leaves first ~86% of the
 time is a strong result for only 16 covariates and no external
 labor-market data — largely because `OverTime` and `MonthlyIncome` alone
 carry most of the signal already visible in the Phase 1 SQL results.
+
+**Tenure leakage check.** Duration is `YearsAtCompany`, so any covariate
+derived from tenure lets the model partly "predict tenure from tenure."
+`YearsInCurrentRole`, `YearsWithCurrManager` and `TotalWorkingYears` are
+excluded for that reason (adding them back pushes CV concordance to ~0.93,
+which is leakage, not skill). `YearsSinceLastPromotion` **is** included,
+and is always ≤ `YearsAtCompany`. Refitting without it:
+
+| Covariate set | CV concordance |
+|---|---|
+| Full model (as reported) | 0.860 |
+| Without `YearsSinceLastPromotion` | 0.851 |
+| Also without `JobLevel`, income, `StockOptionLevel` | 0.747 |
+
+The last three aren't derived from tenure, but they're snapshots taken at
+exit/today that tend to rise with tenure (r ≈ 0.5), so 0.747 is a
+conservative lower bound. The OverTime hazard ratio barely moves
+(2.13–2.16) across all three, so the headline finding doesn't depend on
+these covariates. These numbers are recomputed on every model run
+(`data/processed/survival_model_metrics.json`).
 
 **Proportional-hazards assumption:** checked with `cph.check_assumptions()`
 (full output in `docs/ph_assumptions_check.txt`). Every covariate passes
@@ -35,8 +59,11 @@ model's dominant factor, passes cleanly (p = 0.45–0.76).
 
 **OverTime dominates everything else in the model**, exactly as it did in
 the raw SQL cut (30.5% vs 10.4% attrition) — a hazard ratio of 2.16
-means, holding everything else constant, an employee working overtime is
-about twice as likely to leave at any given point in their tenure. The
+means that, in this dataset and holding the other covariates constant,
+employees working overtime leave at about 2.2× the rate of those who
+don't, at any given point in their tenure. That's an association, not
+evidence that overtime causes leaving: people who are already planning
+to leave may also work differently. The
 Kaplan-Meier curves make this visible directly:
 `docs/figures/km_by_overtime.png` shows the two groups' retention curves
 diverging almost immediately and never reconverging (log-rank test,
@@ -53,8 +80,9 @@ p = 1.6e-19 — this is not noise).
 | Environment satisfaction (per point) | 0.87x | 0.0026 |
 | Stock option level (per level) | 0.86x | 0.025 |
 
-Income and job level are the strongest protective factors — a doubling
-of monthly income roughly halves the hazard. Note the `YearsSinceLastPromotion`
+Income and job level are the strongest protective factors — each 2.72×
+(one e-fold) increase in monthly income is associated with roughly half
+the hazard (doubling income: ~0.64×). Note the `YearsSinceLastPromotion`
 direction: *more* time since the last promotion **lowers** hazard here,
 which looks backwards until you recall this is a survival model — people
 who've been promoted recently are disproportionately people who are
@@ -65,7 +93,9 @@ coefficient as a proxy for "settled into the role," not as "don't promote
 people." This is also the one covariate that fails the proportional-hazards
 check above, which is consistent with it being a proxy effect rather than
 a stable, constant-over-time hazard — its coefficient describes an average
-effect across tenure, not a fixed rate.
+effect across tenure, not a fixed rate. Both symptoms fit the tenure
+leakage described above: it's bounded by `YearsAtCompany`, so part of what
+it encodes is the duration itself.
 
 `WorkLifeBalance` and both `BusinessTravel_Travel_Rarely` and
 `MaritalStatus_Married` were not statistically significant at p < 0.05 —

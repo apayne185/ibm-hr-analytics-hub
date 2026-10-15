@@ -1,7 +1,10 @@
 # IBM HR Analytics Hub
 
 An end-to-end people analytics pipeline: raw HR data → SQL analysis →
-survival-model attrition prediction → a live dashboard. Built as a
+survival-model attrition prediction → a live dashboard, plus an
+automated Excel executive report (`openpyxl`, written to
+`reports/HR_Executive_Report.xlsx` and downloadable from the dashboard).
+Built as a
 hands-on project covering the SQL, Python, and BI workflow used in
 modern people-analytics roles, developed with AI-assisted coding
 tooling throughout — every non-obvious design or modeling decision along
@@ -13,6 +16,9 @@ the way is reviewed and recorded in [DECISIONS.md](DECISIONS.md).
   dataset (also distributed on Kaggle), 1,470 employees with department,
   tenure, satisfaction, income, overtime, and attrition fields.
   `data/raw/WA_Fn-UseC_-HR-Employee-Attrition.csv` — unmodified.
+  **The dataset is fictional** — created by IBM data scientists, not
+  drawn from a real workforce — so every finding in this repo describes
+  patterns *in this dataset*, not real-world facts about attrition.
 - **Synthetic extension:** the raw dataset has no recruiting/time-to-hire
   fields, so a simulated requisition-to-hire pipeline
   (`src/hr_analytics/synthetic_hiring.py`) is joined on `EmployeeNumber`
@@ -68,7 +74,15 @@ tenure (`YearsAtCompany`) as duration and `Attrition` as the event,
 right-censoring employees still on staff — see
 [DECISIONS.md](DECISIONS.md) for why this framing fits the data better
 than a plain classifier. Concordance index: **0.870 in-sample / 0.860
-5-fold cross-validated**; the proportional-hazards assumption is checked
+5-fold cross-validated**. One covariate, `YearsSinceLastPromotion`, is
+bounded by the duration itself, so it partly leaks tenure into the model:
+without it the CV concordance is 0.851, and 0.747 if job level, income and
+stock level (snapshots that rise with tenure) are also removed — see
+[DECISIONS.md](DECISIONS.md). In this dataset, employees working overtime
+leave at about 2.2× the rate of otherwise-similar colleagues at any point
+in their tenure (hazard ratio 2.16, stable across all three covariate
+sets) — an association, not proof that overtime causes leaving. The
+proportional-hazards assumption is checked
 for every covariate (`docs/ph_assumptions_check.txt`). Outputs:
 per-factor hazard ratios (`data/processed/survival_model_coefficients.csv`),
 a per-employee risk score (`data/processed/predicted_attrition_risk.csv`),
