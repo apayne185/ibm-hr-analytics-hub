@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from hr_analytics.survival_model import (
     DURATION_COL,
     EVENT_COL,
+    NUMERIC_COVARIATES,
+    TENURE_DERIVED_COVARIATES,
     build_model_frame,
     feature_columns,
     fit_model,
@@ -75,3 +77,20 @@ def test_overtime_is_the_dominant_risk_factor(raw_df: pd.DataFrame) -> None:
     overtime_row = cph.summary.loc["OverTime"]
     assert overtime_row["p"] < 0.01, "OverTime should be a statistically significant hazard factor"
     assert 1.5 < overtime_row["exp(coef)"] < 3.0, "OverTime's hazard ratio drifted outside the expected range"
+
+
+def test_strongly_tenure_derived_columns_stay_out_of_the_model(raw_df: pd.DataFrame) -> None:
+    """These are bounded by or near-collinear with YearsAtCompany (the
+    duration), so including them lets the model predict tenure from tenure
+    and inflates the concordance index -- see DECISIONS.md."""
+    model_df = build_model_frame(raw_df)
+    for col in ["YearsAtCompany", "YearsInCurrentRole", "YearsWithCurrManager", "TotalWorkingYears"]:
+        assert col not in model_df.columns
+
+
+def test_build_model_frame_respects_a_reduced_covariate_set(raw_df: pd.DataFrame) -> None:
+    reduced = [c for c in NUMERIC_COVARIATES if c not in TENURE_DERIVED_COVARIATES]
+    model_df = build_model_frame(raw_df, reduced)
+    for col in TENURE_DERIVED_COVARIATES:
+        assert col not in model_df.columns
+    assert set(reduced) <= set(model_df.columns)

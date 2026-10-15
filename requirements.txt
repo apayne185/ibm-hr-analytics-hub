@@ -52,6 +52,8 @@ distro==1.9.0
     #   openai
 docstring-parser==0.18.0
     # via anthropic
+et-xmlfile==2.0.0
+    # via openpyxl
 fonttools==4.63.0
     # via matplotlib
 formulaic==1.2.2
@@ -125,6 +127,8 @@ numpy==2.5.0
     #   scipy
     #   streamlit
 openai==2.46.0
+    # via hr-analytics-hub
+openpyxl==3.1.5
     # via hr-analytics-hub
 packaging==26.2
     # via

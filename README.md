@@ -1,7 +1,10 @@
 # IBM HR Analytics Hub
 
 An end-to-end people analytics pipeline: raw HR data → SQL analysis →
-survival-model attrition prediction → a live dashboard. Built as a
+survival-model attrition prediction → a live dashboard, plus an
+automated Excel executive report (`openpyxl`, written to
+`reports/HR_Executive_Report.xlsx` and downloadable from the dashboard).
+Built as a
 hands-on project covering the SQL, Python, and BI workflow used in
 modern people-analytics roles, developed with AI-assisted coding
 tooling throughout — every non-obvious design or modeling decision along
@@ -13,6 +16,9 @@ the way is reviewed and recorded in [DECISIONS.md](DECISIONS.md).
   dataset (also distributed on Kaggle), 1,470 employees with department,
   tenure, satisfaction, income, overtime, and attrition fields.
   `data/raw/WA_Fn-UseC_-HR-Employee-Attrition.csv` — unmodified.
+  **The dataset is fictional** — created by IBM data scientists, not
+  drawn from a real workforce — so every finding in this repo describes
+  patterns *in this dataset*, not real-world facts about attrition.
 - **Synthetic extension:** the raw dataset has no recruiting/time-to-hire
   fields, so a simulated requisition-to-hire pipeline
   (`src/hr_analytics/synthetic_hiring.py`) is joined on `EmployeeNumber`
@@ -36,6 +42,7 @@ src/
 sql/              SQL analysis queries
 notebooks/        exploratory analysis
 dashboard/        BI dashboard
+reports/          generated Excel executive report
 docs/             supporting documentation
 tests/            pytest suite
 .github/workflows/  CI
@@ -67,7 +74,15 @@ tenure (`YearsAtCompany`) as duration and `Attrition` as the event,
 right-censoring employees still on staff — see
 [DECISIONS.md](DECISIONS.md) for why this framing fits the data better
 than a plain classifier. Concordance index: **0.870 in-sample / 0.860
-5-fold cross-validated**; the proportional-hazards assumption is checked
+5-fold cross-validated**. One covariate, `YearsSinceLastPromotion`, is
+bounded by the duration itself, so it partly leaks tenure into the model:
+without it the CV concordance is 0.851, and 0.747 if job level, income and
+stock level (snapshots that rise with tenure) are also removed — see
+[DECISIONS.md](DECISIONS.md). In this dataset, employees working overtime
+leave at about 2.2× the rate of otherwise-similar colleagues at any point
+in their tenure (hazard ratio 2.16, stable across all three covariate
+sets) — an association, not proof that overtime causes leaving. The
+proportional-hazards assumption is checked
 for every covariate (`docs/ph_assumptions_check.txt`). Outputs:
 per-factor hazard ratios (`data/processed/survival_model_coefficients.csv`),
 a per-employee risk score (`data/processed/predicted_attrition_risk.csv`),
@@ -157,6 +172,39 @@ since it requires connecting your own GitHub account:
    already-committed CSVs, not a full model refit, so it's fast).
 5. Update the live demo link above once you have the app's URL.
 
+## Automated Excel executive report
+
+`src/hr_analytics/excel_report.py` generates a formatted, 6-sheet Excel
+workbook (`reports/HR_Executive_Report.xlsx`) from the same pipeline
+outputs the dashboard reads — the kind of stakeholder-ready deliverable
+that gets emailed around, not just viewed live:
+
+- **Executive Summary** — KPI scorecard, including an estimated total
+  turnover cost. **That figure is an illustrative estimate** (income x
+  12 x a job-level-scaled industry rule-of-thumb multiplier), not
+  observed cost data — labelled as such on the sheet itself. See
+  DECISIONS.md for the exact methodology.
+- **Attrition by Dept & Role**, **Flight Risk Watchlist**, **Survival
+  Model Hazard Ratios** — direct reuse of existing pipeline outputs,
+  with conditional color-scale formatting.
+- **Department x Tenure Pivot** — a `pandas.pivot_table()` cross-tab
+  written as a static formatted table. This is *not* a genuine
+  interactive native Excel PivotTable — neither `openpyxl` nor
+  `xlsxwriter` can reliably create those from scratch. See DECISIONS.md
+  for why that's the honest scope.
+- **Hiring Pipeline (Synthetic)** — clearly labelled synthetic, same as
+  everywhere else this data appears.
+
+The output is byte-reproducible (verified, not assumed — see
+DECISIONS.md for two non-obvious `openpyxl` determinism gotchas found
+and fixed while building this), so it's committed and covered by CI's
+deterministic-diff check like the SQL results are. Also downloadable
+directly from the dashboard's Overview tab.
+
+```bash
+uv run python -m src.hr_analytics.excel_report   # writes reports/HR_Executive_Report.xlsx
+```
+
 ## Testing
 
 `tests/` (pytest) covers the data-generation invariants (date ordering,
@@ -166,8 +214,11 @@ behavior under a simulated mid-load failure), every SQL query (runs
 cleanly + a regression test for the month-spine fix in query 10), and
 the chat agent — provider abstraction, SQL tool safety (including a real
 injection-payload test), RAG chunking/retrieval, context-window bounding,
-and the full multi-turn tool-calling loop via a scripted `FakeProvider`.
-None of this requires an API key or network access — that's a deliberate
+and the full multi-turn tool-calling loop via a scripted `FakeProvider` —
+and the Excel report generator (turnover-cost calculation, reloaded cell
+values, conditional formatting actually attached, and byte-reproducibility
+across repeated regenerations). None of this requires an API key or
+network access — that's a deliberate
 design constraint of the chat agent's test suite, not just this repo's
 general testing philosophy. CI (`.github/workflows/ci.yml`) runs the
 suite on every push/PR, then rebuilds the full pipeline end-to-end and
@@ -196,6 +247,7 @@ uv run python -m src.hr_analytics.synthetic_hiring   # regenerate data/processed
 uv run python -m src.hr_analytics.load_db            # build the SQLite database
 uv run python -m src.hr_analytics.run_queries        # run the SQL analysis queries
 uv run python -m src.hr_analytics.survival_model     # fit the Cox model, generate risk scores + plots
+uv run python -m src.hr_analytics.excel_report       # generate reports/HR_Executive_Report.xlsx
 uv run streamlit run dashboard/app.py                # launch the dashboard
 ```
 
@@ -207,6 +259,7 @@ uv run streamlit run dashboard/app.py                # launch the dashboard
 - [x] Phase 3 — dashboard (Streamlit, 6 tabs, self-bootstrapping)
 - [x] Tests + CI (pytest suite, GitHub Actions pipeline-reproducibility check)
 - [x] Ask the Data — RAG + tool-calling chat agent, provider-agnostic, zero-network test suite
+- [x] Automated Excel executive report — byte-reproducible, downloadable from the dashboard
 
 ## License
 

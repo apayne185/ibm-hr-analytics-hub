@@ -5,9 +5,9 @@ employee's tenure (YearsAtCompany) and whether they've left (Attrition).
 That's exactly the shape a survival model wants: duration + event
 indicator, with current employees right-censored at their tenure so far.
 This fits a Cox Proportional Hazards model instead of a plain
-classifier so the output is a hazard ratio per risk factor ("overtime
-roughly doubles your hazard of leaving") rather than a single point
-prediction, and produces per-employee risk scores for employees who are
+classifier so the output is a hazard ratio per risk factor ("in this
+dataset, employees on overtime leave at ~2.2x the rate of comparable
+employees who aren't") rather than a single point prediction, and produces per-employee risk scores for employees who are
 still on staff. See DECISIONS.md for the duration/censoring assumptions.
 """
 
@@ -47,6 +47,16 @@ NUMERIC_COVARIATES = [
     "log_monthly_income",
 ]
 
+# Covariates that are partly a function of the duration itself, so they can
+# leak tenure into the model and inflate the concordance index:
+# - TENURE_DERIVED: mechanically bounded by YearsAtCompany (always <= it).
+# - TENURE_ACCRUING: end-of-observation snapshots that tend to rise with
+#   tenure (r ~ 0.5 with YearsAtCompany), but also carry real signal.
+# YearsInCurrentRole, YearsWithCurrManager and TotalWorkingYears are left
+# out of NUMERIC_COVARIATES entirely for the same reason. See DECISIONS.md.
+TENURE_DERIVED_COVARIATES = ["YearsSinceLastPromotion"]
+TENURE_ACCRUING_COVARIATES = ["JobLevel", "log_monthly_income", "StockOptionLevel"]
+
 DURATION_COL = "duration_years"
 EVENT_COL = "event_left"
 PENALIZER = 0.1
@@ -54,7 +64,9 @@ CV_FOLDS = 5
 CV_SEED = 42
 
 
-def build_model_frame(raw: pd.DataFrame) -> pd.DataFrame:
+def build_model_frame(raw: pd.DataFrame, numeric_covariates: list[str] | None = None) -> pd.DataFrame:
+    if numeric_covariates is None:
+        numeric_covariates = NUMERIC_COVARIATES
     df = raw.copy()
     df["OverTime"] = (df["OverTime"] == "Yes").astype(int)
     df["log_monthly_income"] = np.log(df["MonthlyIncome"])
@@ -65,7 +77,7 @@ def build_model_frame(raw: pd.DataFrame) -> pd.DataFrame:
     # as having survived half a year rather than dropping them.
     df[DURATION_COL] = df["YearsAtCompany"].clip(lower=0.5)
 
-    model_df = df[[DURATION_COL, EVENT_COL, "EmployeeNumber"] + NUMERIC_COVARIATES + CATEGORICAL_COVARIATES]
+    model_df = df[[DURATION_COL, EVENT_COL, "EmployeeNumber"] + numeric_covariates + CATEGORICAL_COVARIATES]
     model_df = pd.get_dummies(model_df, columns=CATEGORICAL_COVARIATES, drop_first=True)
     return model_df
 
@@ -94,6 +106,25 @@ def cross_validated_concordance(model_df: pd.DataFrame, k: int = CV_FOLDS) -> np
         k=k, scoring_method="concordance_index", seed=CV_SEED,
     )
     return np.array(scores)
+
+
+def tenure_leakage_sensitivity(raw: pd.DataFrame) -> dict[str, float]:
+    """CV concordance with the tenure-linked covariates removed.
+
+    The headline concordance includes covariates that partly encode the
+    duration itself, so the model can partly "predict tenure from tenure."
+    Refitting without them shows how much of the score that accounts for.
+    """
+    without_derived = [c for c in NUMERIC_COVARIATES if c not in TENURE_DERIVED_COVARIATES]
+    without_accruing = [c for c in without_derived if c not in TENURE_ACCRUING_COVARIATES]
+    return {
+        "concordance_cv_without_tenure_derived": round(
+            cross_validated_concordance(build_model_frame(raw, without_derived)).mean(), 3
+        ),
+        "concordance_cv_without_tenure_linked": round(
+            cross_validated_concordance(build_model_frame(raw, without_accruing)).mean(), 3
+        ),
+    }
 
 
 def check_ph_assumptions(cph: CoxPHFitter, model_df: pd.DataFrame, p_value_threshold: float = 0.01) -> None:
@@ -189,6 +220,12 @@ def main() -> None:
     cv_scores = cross_validated_concordance(model_df)
     print(f"{CV_FOLDS}-fold cross-validated concordance index: {cv_scores.mean():.3f} (+/- {cv_scores.std():.3f})")
 
+    leakage = tenure_leakage_sensitivity(raw)
+    print(
+        f"CV concordance without {TENURE_DERIVED_COVARIATES}: {leakage['concordance_cv_without_tenure_derived']:.3f}; "
+        f"also without {TENURE_ACCRUING_COVARIATES}: {leakage['concordance_cv_without_tenure_linked']:.3f}"
+    )
+
     check_ph_assumptions(cph, model_df)
 
     COEFFICIENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -205,6 +242,7 @@ def main() -> None:
                 "concordance_in_sample": round(cph.concordance_index_, 3),
                 "concordance_cv_mean": round(cv_scores.mean(), 3),
                 "concordance_cv_std": round(cv_scores.std(), 3),
+                **leakage,
                 "cv_folds": CV_FOLDS,
                 "n_employees": len(model_df),
                 "n_events": int(model_df[EVENT_COL].sum()),
